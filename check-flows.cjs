@@ -1,10 +1,11 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const storage=new Map();
-function boot(){
+function boot(auth){
  const elements=new Map(), events={},winEvents={};
- const element=s=>{if(!elements.has(s))elements.set(s,{innerHTML:'',textContent:'',value:'',classList:{add(){},remove(){},toggle(){}},addEventListener(type,cb){this[type]=cb},focus(){},showModal(){this.open=true},close(){this.open=false},elements:{wakes:{},awake:{},hours:{},rested:{}}});return elements.get(s)};
+ const element=s=>{if(!elements.has(s))elements.set(s,{innerHTML:'',textContent:'',value:'',querySelector(){return null},classList:{add(){},remove(){},toggle(){}},addEventListener(type,cb){this[type]=cb},focus(){},showModal(){this.open=true},close(){this.open=false},elements:{wakes:{},awake:{},hours:{},rested:{}}});return elements.get(s)};
  const ctx={document:{querySelector:element,body:{classList:{toggle(){}}},addEventListener:(name,cb)=>events[name]=cb,getElementById:()=>null},window:{addEventListener:(n,cb)=>winEvents[n]=cb,scrollTo(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},location:{hash:'#home'},requestAnimationFrame:cb=>cb(),setTimeout:()=>0,clearTimeout(){},confirm:()=>true,console,FormData:class{constructor(f){this.f=f}get(k){return this.f[k]}}};
- vm.createContext(ctx);vm.runInContext(fs.readFileSync('dist/lessons.js','utf8'),ctx);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);
+ ctx.document.body.classList.add=()=>{};ctx.document.body.classList.remove=()=>{};if(auth)ctx.window.SleepAuth=auth;
+ vm.createContext(ctx);vm.runInContext(fs.readFileSync('dist/account.js','utf8'),ctx);vm.runInContext(fs.readFileSync('dist/lessons.js','utf8'),ctx);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);
  return {ctx,element,run:s=>vm.runInContext(s,ctx),click(dataset){events.click({target:{closest:()=>({dataset})}})},route(hash){ctx.location.hash=hash;winEvents.hashchange()},input(value){element('#reflection').value=value;events.input({target:{id:'reflection',value}})}};
 }
 const a=boot();assert.equal(a.run('lessons.length'),28);assert.equal(a.run('currentDay()'),8);
@@ -23,3 +24,12 @@ b.click({action:'checkin'});assert(b.element('#checkin').open);b.element('#check
 b.route('#night-reset');for(let i=0;i<3;i++)b.click({action:'night-next'});assert.equal(b.ctx.location.hash,'dashboard');
 b.route('#journal');b.click({action:'clear'});assert.equal(b.run('state.complete.length'),0);assert.equal(b.run('state.entry'),null);assert.equal(boot().run('currentDay()'),1);
 console.log('PASS: all routes, 28 lessons x 3 steps, completion, safe reflections, reload persistence, 4 quiz profiles, period switch, check-in, night reset, data reset.');
+let notify,cloudWrites=[];
+const auth={user:null,ready:true,loaded:true,error:'',status:'',data:{complete:[],notes:{},lessonSteps:{},history:[],entry:null},name:'Alice',loadVersion:0,subscribe(fn){notify=fn},init(){notify(this)},save(data){cloudWrites.push(structuredClone(data))}};
+const c=boot(auth);c.route('#dashboard');assert(c.element('#main').innerHTML.includes('Welcome back.'),'guest must see sign in');
+c.route('#demo');assert(c.element('#main').innerHTML.includes('Good morning, Alex.'));c.route('#account');assert(c.element('#main').innerHTML.includes('Welcome back.'),'demo must not bypass account gate');
+auth.user={id:'alice',email:'alice@example.test'};notify(auth);assert.equal(c.run('state.complete.length'),0);c.route('#dashboard');assert(c.element('#main').innerHTML.includes('Good morning, Alice.'));assert(c.element('#main').innerHTML.includes('Record my first night'));
+c.element('#checkin-form').submit({preventDefault(){},target:{wakes:'3',awake:'42',hours:'6.5',rested:'A little tired'}});assert.equal(cloudWrites.at(-1).history.length,1);c.element('#checkin-form').submit({preventDefault(){},target:{wakes:'2',awake:'30',hours:'7',rested:'Rested'}});assert.equal(cloudWrites.at(-1).history.length,1,'same-date check-in updates instead of duplicating');
+c.route('#insights');assert(c.element('#main').innerHTML.includes('2.0'));assert(!c.element('#main').innerHTML.includes('SAMPLE DATA'));c.route('#lesson/1');c.click({action:'complete'});assert(cloudWrites.at(-1).complete.includes(1));c.route('#journal');assert(c.element('#main').innerHTML.includes('Your recorded nights'));assert(!c.element('#main').innerHTML.includes('Clear my demo data'));
+auth.user=null;notify(auth);assert.equal(c.run('state.history.length'),0);assert.equal(c.run('state.complete.length'),0);assert(c.element('#main').innerHTML.includes('Welcome back.'));
+console.log('PASS: guest route protection, explicit demo, real empty account, cloud check-in upsert, personal averages, lesson saving, journal and logout cleanup.');

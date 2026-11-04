@@ -7,12 +7,15 @@ const assets = {};
 for (const [name, type] of [
   ['index.html', 'text/html; charset=utf-8'],
   ['app.js', 'text/javascript; charset=utf-8'],
+  ['auth.js', 'text/javascript; charset=utf-8'],
+  ['account.js', 'text/javascript; charset=utf-8'],
+  ['config.js', 'text/javascript; charset=utf-8'],
+  ['account.css', 'text/css; charset=utf-8'],
   ['lessons.js', 'text/javascript; charset=utf-8'],
   ['style.css', 'text/css; charset=utf-8'],
   ['experience.css', 'text/css; charset=utf-8'],
   ['design-notes.html', 'text/html; charset=utf-8']
 ]) assets['/' + name] = { type, text: fs.readFileSync('dist/' + name, 'utf8') };
-assets['/assets/night-waking.webp'] = { type: 'image/webp', base64: fs.readFileSync('dist/assets/night-waking.webp').toString('base64') };
 assets['/favicon.ico'] = { type: 'image/svg+xml', text: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#0b1b2b"/><path d="M45 39A23 23 0 0 1 27 12a22 22 0 1 0 18 27" fill="#d3c1fa"/></svg>' };
 const packed = zlib.gzipSync(JSON.stringify(assets), { level: 9 }).toString('base64');
 const code = `// Generated from dist by scripts/build-railway.cjs. Do not edit encoded data.
