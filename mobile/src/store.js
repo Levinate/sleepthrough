@@ -3,23 +3,88 @@ import{createClient}from'@supabase/supabase-js';
 import{chooseNights,cloudSummary,days,localDay,dayAt,SAMSUNG}from'./sleep.js';
 export const native=Capacitor.isNativePlatform(),Vault=registerPlugin('SecureVault'),Health=registerPlugin('SleepHealth');
 const preview=new Map();
-export const storage={async getItem(key){return native?(await Vault.get({key})).value:preview.get(key)||null},async setItem(key,value){if(native)await Vault.set({key,value});else preview.set(key,value)},async removeItem(key){if(native)await Vault.remove({key});else preview.delete(key)}};
+export const storage={
+ async getItem(key){
+  if(!native)return preview.get(key)??null;
+  try{return(await Vault.get({key})).value;}
+  catch(error){
+   // Retry transient Keystore/provider failures once, without changing the stored blob.
+   if(!['vault_locked','vault_read','storage_error'].includes(error?.code))throw error;
+   await new Promise(resolve=>setTimeout(resolve,200));return(await Vault.get({key})).value;
+  }
+ },
+ async setItem(key,value){if(native)await Vault.set({key,value});else preview.set(key,value)},
+ async removeItem(key){if(native)await Vault.remove({key});else preview.delete(key)}
+};
 const config=window.SLEEPTHROUGH_CONFIG;
 export const client=createClient(config.url,config.publishableKey,{auth:{storage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,flowType:'pkce'}});
 const empty=()=>({records:{},health:{enabled:false,cloud:false,records:{},summaries:{},selection:{},token:null,lastSync:null},quiz:{answers:[],step:0},source:'manual',started:false,migrated:false});
-export const store={uid:'local',user:null,state:empty(),status:'On this phone',busy:false,healthBusy:false,conflicts:[],recovery:false,error:'',generation:0};
+export const store={uid:'local',user:null,state:empty(),status:'On this phone',busy:true,ready:false,healthBusy:false,conflicts:[],recovery:false,error:'',errorCode:'',errorPhase:'',generation:0};
 let notify=()=>{},write=Promise.resolve(),syncing=false,cloudTimer;
 export function subscribe(fn){notify=fn;}
 export function emit(){notify(store);}
-export function pruneHealth(){const h=store.state.health,rawStart=days(28)[0],summaryStart=days(366)[0];h.records=Object.fromEntries(Object.entries(h.records).filter(([,r])=>dayAt(r.end,r.endOffsetSeconds)>=rawStart));h.summaries=Object.fromEntries(Object.entries(h.summaries).filter(([day])=>day>=summaryStart));for(const r of Object.values(store.state.records))if(r.kind==='health'&&r.data.day<summaryStart){r.deleted=true;r.dirty=true;}}
+export function pruneHealth(){
+ const h=store.state.health,rawStart=days(28)[0],summaryStart=days(366)[0];let changed=false;
+ h.records=Object.fromEntries(Object.entries(h.records).filter(([,r])=>{
+  // An unreadable imported timestamp must not block access to the entire diary.
+  const keep=!Number.isFinite(Date.parse(r?.end))||dayAt(r.end,r.endOffsetSeconds)>=rawStart;if(!keep)changed=true;return keep;
+ }));
+ h.summaries=Object.fromEntries(Object.entries(h.summaries).filter(([day])=>{const keep=day>=summaryStart;if(!keep)changed=true;return keep;}));
+ for(const r of Object.values(store.state.records))if(r.kind==='health'&&r.data?.day<summaryStart&&!r.deleted){r.deleted=true;r.dirty=true;changed=true;}
+ return changed;
+}
 export function record(id){return store.state.records[id]?.deleted?null:store.state.records[id]?.data||null;}
 export function records(kind){return Object.values(store.state.records).filter(r=>r.kind===kind&&!r.deleted).map(r=>r.data);}
-export function persist(){const uid=store.uid,snapshot=JSON.stringify(store.state);write=write.catch(()=>{}).then(()=>storage.setItem('state:'+uid,snapshot));return write;}
-export async function loadUser(user){const ticket=++store.generation;store.user=user;store.uid=user?.id||'local';store.conflicts=[];store.state=empty();store.status=user?'Loading account…':'On this phone';store.busy=true;emit();try{const value=await storage.getItem('state:'+store.uid);if(ticket!==store.generation)return;if(value){const saved=JSON.parse(value);store.state={...empty(),...saved,health:{...empty().health,...saved.health}};}pruneHealth();await persist();store.error='';}catch{store.error='Local storage could not be opened. Do not clear app data; please retry.';}store.busy=false;emit();if(user)await sync();}
+function storageError(phase,error){
+ const codes=new Set(['vault_key_missing','vault_key_invalid','vault_locked','vault_format','vault_decrypt','vault_read','vault_write','storage_error','invalid_json','invalid_state','UNIMPLEMENTED','UNAVAILABLE']);
+ store.errorPhase=phase;store.errorCode=phase+':'+(codes.has(error?.code)?error.code:'unavailable');store.ready=false;
+ store.error=phase==='write'?'Your latest changes could not be saved. Keep the app open and retry saving.':phase==='decode'?'Your saved data needs recovery. It has not been replaced. Please retry.':'Your saved data could not be opened. Unlock your phone, then retry. Do not clear app data.';
+ store.status=phase==='write'?'Changes not saved':'Local data unavailable';
+}
+const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+function restore(value){
+ let saved;try{saved=JSON.parse(value);}catch{throw Object.assign(Error('Invalid saved JSON'),{code:'invalid_json'});}
+ const invalid=()=>{throw Object.assign(Error('Invalid saved state'),{code:'invalid_state'});};
+ if(!object(saved))invalid();
+ const result={...empty(),...saved,health:{...empty().health,...saved.health},quiz:{...empty().quiz,...saved.quiz}};
+ for(const map of [result.records,result.health.records,result.health.summaries,result.health.selection])if(!object(map))invalid();
+ if(Object.values(result.records).some(r=>!object(r)||!object(r.data)||typeof r.kind!=='string')||!Array.isArray(result.quiz.answers)||!Number.isInteger(result.quiz.step)||result.quiz.step<0||result.quiz.step>15)invalid();
+ return result;
+}
+export function persist(){
+ if(!store.ready||store.busy||store.error)return Promise.reject(Error('Wait for your saved data to open before saving changes.'));
+ const uid=store.uid,ticket=store.generation,snapshot=JSON.stringify(store.state);
+ write=write.catch(()=>{}).then(()=>storage.setItem('state:'+uid,snapshot)).catch(error=>{if(ticket===store.generation){storageError('write',error);emit();}throw error;});return write;
+}
+export async function loadUser(user){
+ const ticket=++store.generation,uid=user?.id||'local';store.ready=false;store.busy=true;store.error='';store.errorCode='';store.errorPhase='';store.user=user;store.uid=uid;store.conflicts=[];store.state=empty();store.status=user?'Loading account…':'On this phone';emit();let phase='read',pruned=false;
+ try{
+  // Finish earlier validated saves before reading the same account again.
+  await write.catch(()=>{});if(ticket!==store.generation)return false;
+  const value=await storage.getItem('state:'+uid);if(ticket!==store.generation)return false;
+  phase='decode';if(value!==null)store.state=restore(value);
+  pruned=pruneHealth();store.ready=true;
+ }catch(error){if(ticket!==store.generation)return false;storageError(phase,error);}
+ if(ticket!==store.generation)return false;store.busy=false;
+ if(pruned&&store.ready)try{await persist();}catch{/* persist retains the current snapshot for retry */}
+ if(ticket!==store.generation)return false;emit();if(user&&store.ready)await sync();return store.ready;
+}
+export async function retryStorage(){
+ if(store.errorPhase!=='write')return loadUser(store.user);
+ // Keep the unsaved in-memory snapshot instead of replacing it with an older disk copy.
+ store.error='';store.errorCode='';store.errorPhase='';store.ready=true;
+ try{await persist();store.status='Saved on this phone';emit();await sync();return true;}catch{return false;}
+}
+export async function resumeApp(){
+ // A lifecycle event is not a reason to write an empty or unread profile.
+ if(!store.ready||store.busy||store.error)return;
+ if(pruneHealth())await persist();
+ await sync();if(store.ready&&!store.error&&store.state.health.enabled)await healthSync();
+}
 export async function setRecord(id,kind,data){if(store.busy||store.error)throw Error('Wait for your data to finish loading.');const old=store.state.records[id];store.state.records[id]={kind,data,revision:old?.revision||0,dirty:true,deleted:false};await persist();store.status=store.user?'Saved on phone · waiting to sync':'Saved on this phone';emit();clearTimeout(cloudTimer);cloudTimer=setTimeout(sync,500);}
 export async function deleteRecord(id){const r=store.state.records[id];if(!r)return;r.deleted=true;r.dirty=true;await persist();emit();await sync();}
 export async function sync(){
- if(!store.user||syncing||!navigator.onLine||store.error)return;
+ if(!store.user||syncing||!navigator.onLine||store.error||!store.ready||store.busy)return;
  syncing=true;const uid=store.uid,ticket=store.generation;store.status='Syncing…';emit();
  try{
   let remote=[];for(let offset=0;;offset+=500){const{data,error}=await client.from('sleepthrough_mobile_records').select('*').eq('user_id',uid).range(offset,offset+499);if(error)throw error;remote.push(...data);if(data.length<500)break;}
@@ -51,7 +116,7 @@ export async function resolveConflict(id,useLocal){const c=store.conflicts.find(
 export async function signOut(){await sync();if(Object.values(store.state.records).some(r=>r.dirty)&&!confirm('Some changes are only on this phone. Signing out will discard these local changes. Sign out anyway?'))return false;const old=store.uid;const{error}=await client.auth.signOut({scope:'local'});if(error)throw Error('Could not sign out. Try again.');await storage.removeItem('state:'+old);await loadUser(null);return true;}
 export async function startLocal(name){store.state.started=true;await setRecord('profile','profile',{name,adult:true,createdAt:new Date().toISOString()});}
 export async function healthSync(){
- if(store.healthBusy||!store.state.health.enabled||!native)return;
+ if(store.healthBusy||!store.state.health.enabled||!native||!store.ready||store.busy||store.error)return;
  store.healthBusy=true;const ticket=store.generation,h=structuredClone(store.state.health);emit();
  try{
   if(!(await Health.getSleepPermission()).granted){store.state.health.enabled=false;await persist();throw Error('Sleep access is off. Open Health Connect to reconnect.');}

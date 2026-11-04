@@ -13,14 +13,26 @@ import javax.crypto.spec.GCMParameterSpec
 
 @CapacitorPlugin(name = "SecureVault")
 class SecureVaultPlugin : Plugin() {
-    private fun key(): SecretKey {
+    private class MissingKey : Exception()
+    private class InvalidFormat : Exception()
+    private fun key(create: Boolean): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = store.getKey("sleepthrough-vault-v1", null)
         if (existing != null) return existing as SecretKey
+        // Never replace a missing key when ciphertext still depends on it.
+        if (!create || context.getSharedPreferences("sleepthrough-encrypted", 0).all.isNotEmpty()) throw MissingKey()
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder("sleepthrough-vault-v1", KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         }.generateKey()
+    }
+    private fun code(error: Exception, fallback: String): String = when(error) {
+        is MissingKey -> "vault_key_missing"
+        is android.security.keystore.KeyPermanentlyInvalidatedException -> "vault_key_invalid"
+        is android.security.keystore.UserNotAuthenticatedException -> "vault_locked"
+        is InvalidFormat -> "vault_format"
+        is javax.crypto.AEADBadTagException -> "vault_decrypt"
+        else -> fallback
     }
     @Synchronized @PluginMethod
     fun get(call: PluginCall) {
@@ -29,10 +41,15 @@ class SecureVaultPlugin : Plugin() {
             val value = context.getSharedPreferences("sleepthrough-encrypted", 0).getString(name, null)
             if (value == null) { call.resolve(JSObject().put("value", org.json.JSONObject.NULL)); return }
             val parts = value.split(":")
+            if (parts.size != 2) throw InvalidFormat()
+            val iv: ByteArray; val ciphertext: ByteArray
+            try { iv = Base64.decode(parts[0], Base64.NO_WRAP); ciphertext = Base64.decode(parts[1], Base64.NO_WRAP) }
+            catch(e: IllegalArgumentException) { throw InvalidFormat() }
+            if (iv.size != 12 || ciphertext.size < 16) throw InvalidFormat()
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))
-            call.resolve(JSObject().put("value", String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), Charsets.UTF_8)))
-        } catch (e: Exception) { call.reject("Secure storage could not be opened", "storage_error") }
+            cipher.init(Cipher.DECRYPT_MODE, key(false), GCMParameterSpec(128, iv))
+            call.resolve(JSObject().put("value", String(cipher.doFinal(ciphertext), Charsets.UTF_8)))
+        } catch (e: Exception) { call.reject("Secure storage could not be opened", code(e,"vault_read")) }
     }
     @Synchronized @PluginMethod
     fun set(call: PluginCall) {
@@ -40,11 +57,11 @@ class SecureVaultPlugin : Plugin() {
             val name = call.getString("key") ?: throw IllegalArgumentException()
             val value = call.getString("value") ?: throw IllegalArgumentException()
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, key())
+            cipher.init(Cipher.ENCRYPT_MODE, key(true))
             val encrypted = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(cipher.doFinal(value.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
             if (!context.getSharedPreferences("sleepthrough-encrypted", 0).edit().putString(name, encrypted).commit()) throw IllegalStateException()
             call.resolve()
-        } catch (e: Exception) { call.reject("Changes were not saved securely", "storage_error") }
+        } catch (e: Exception) { call.reject("Changes were not saved securely", code(e,"vault_write")) }
     }
     @PluginMethod
     fun remove(call: PluginCall) {
