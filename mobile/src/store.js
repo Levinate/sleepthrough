@@ -11,10 +11,11 @@ export const store={uid:'local',user:null,state:empty(),status:'On this phone',b
 let notify=()=>{},write=Promise.resolve(),syncing=false,cloudTimer;
 export function subscribe(fn){notify=fn;}
 export function emit(){notify(store);}
+export function pruneHealth(){const h=store.state.health,rawStart=days(28)[0],summaryStart=days(366)[0];h.records=Object.fromEntries(Object.entries(h.records).filter(([,r])=>dayAt(r.end,r.endOffsetSeconds)>=rawStart));h.summaries=Object.fromEntries(Object.entries(h.summaries).filter(([day])=>day>=summaryStart));for(const r of Object.values(store.state.records))if(r.kind==='health'&&r.data.day<summaryStart){r.deleted=true;r.dirty=true;}}
 export function record(id){return store.state.records[id]?.deleted?null:store.state.records[id]?.data||null;}
 export function records(kind){return Object.values(store.state.records).filter(r=>r.kind===kind&&!r.deleted).map(r=>r.data);}
 export function persist(){const uid=store.uid,snapshot=JSON.stringify(store.state);write=write.catch(()=>{}).then(()=>storage.setItem('state:'+uid,snapshot));return write;}
-export async function loadUser(user){const ticket=++store.generation;store.user=user;store.uid=user?.id||'local';store.conflicts=[];store.state=empty();store.status=user?'Loading account…':'On this phone';store.busy=true;emit();try{const value=await storage.getItem('state:'+store.uid);if(ticket!==store.generation)return;if(value){const saved=JSON.parse(value);store.state={...empty(),...saved,health:{...empty().health,...saved.health}};}store.error='';}catch{store.error='Local storage could not be opened. Do not clear app data; please retry.';}store.busy=false;emit();if(user)await sync();}
+export async function loadUser(user){const ticket=++store.generation;store.user=user;store.uid=user?.id||'local';store.conflicts=[];store.state=empty();store.status=user?'Loading account…':'On this phone';store.busy=true;emit();try{const value=await storage.getItem('state:'+store.uid);if(ticket!==store.generation)return;if(value){const saved=JSON.parse(value);store.state={...empty(),...saved,health:{...empty().health,...saved.health}};}pruneHealth();await persist();store.error='';}catch{store.error='Local storage could not be opened. Do not clear app data; please retry.';}store.busy=false;emit();if(user)await sync();}
 export async function setRecord(id,kind,data){if(store.busy||store.error)throw Error('Wait for your data to finish loading.');const old=store.state.records[id];store.state.records[id]={kind,data,revision:old?.revision||0,dirty:true,deleted:false};await persist();store.status=store.user?'Saved on phone · waiting to sync':'Saved on this phone';emit();clearTimeout(cloudTimer);cloudTimer=setTimeout(sync,500);}
 export async function deleteRecord(id){const r=store.state.records[id];if(!r)return;r.deleted=true;r.dirty=true;await persist();emit();await sync();}
 export async function sync(){
@@ -31,6 +32,7 @@ export async function sync(){
   store.conflicts=[];
   for(const r of remote){const local=store.state.records[r.id];if(local?.dirty){if(local.revision!==r.revision)store.conflicts.push({id:r.id,remote:r});}else store.state.records[r.id]={kind:r.kind,data:r.data,revision:r.revision,dirty:false};}
   const remoteIds=new Set(remote.map(r=>r.id));for(const[id,r]of Object.entries(store.state.records))if(r.revision&&!r.dirty&&!remoteIds.has(id))delete store.state.records[id];
+  pruneHealth();
   for(const[id,r]of Object.entries(store.state.records)){
    if(!r.dirty||store.conflicts.some(c=>c.id===id))continue;if(r.kind==='health'&&!store.state.health.cloud&&!r.deleted)continue;
    const snapshot=JSON.stringify(r.data),expected=r.revision;
