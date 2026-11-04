@@ -1,0 +1,9 @@
+.git
+node_modules
+build
+docs
+scripts
+*.md
+.env*
+.openai
+check-*.cjs

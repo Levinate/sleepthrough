@@ -1,0 +1,25 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const storage=new Map();
+function boot(){
+ const elements=new Map(), events={},winEvents={};
+ const element=s=>{if(!elements.has(s))elements.set(s,{innerHTML:'',textContent:'',value:'',classList:{add(){},remove(){},toggle(){}},addEventListener(type,cb){this[type]=cb},focus(){},showModal(){this.open=true},close(){this.open=false},elements:{wakes:{},awake:{},hours:{},rested:{}}});return elements.get(s)};
+ const ctx={document:{querySelector:element,body:{classList:{toggle(){}}},addEventListener:(name,cb)=>events[name]=cb,getElementById:()=>null},window:{addEventListener:(n,cb)=>winEvents[n]=cb,scrollTo(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},location:{hash:'#home'},requestAnimationFrame:cb=>cb(),setTimeout:()=>0,clearTimeout(){},confirm:()=>true,console,FormData:class{constructor(f){this.f=f}get(k){return this.f[k]}}};
+ vm.createContext(ctx);vm.runInContext(fs.readFileSync('dist/lessons.js','utf8'),ctx);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);
+ return {ctx,element,run:s=>vm.runInContext(s,ctx),click(dataset){events.click({target:{closest:()=>({dataset})}})},route(hash){ctx.location.hash=hash;winEvents.hashchange()},input(value){element('#reflection').value=value;events.input({target:{id:'reflection',value}})}};
+}
+const a=boot();assert.equal(a.run('lessons.length'),28);assert.equal(a.run('currentDay()'),8);
+for(const hash of ['#home','#how','#program','#inside','#faq','#dashboard','#lessons','#insights','#journal','#quiz','#profile','#plans','#night-reset']){a.route(hash);assert(a.element('#main').innerHTML.length>400,hash);assert(!a.element('#main').innerHTML.includes('undefined'),hash);}
+for(let day=1;day<=28;day++){a.route('#lesson/'+day);assert(a.element('#main').innerHTML.includes('DAY '+day));for(let step=0;step<3;step++){a.click({lessonStep:String(step)});assert.equal(a.run('state.lessonStep'),step);assert(a.element('#main').innerHTML.includes(a.run(`lessons[${day-1}].title`)));}}
+a.route('#lesson/8');a.click({lessonStep:'2'});a.input('<img src=x onerror=alert(1)> & a thought');a.click({action:'complete'});assert(a.run('state.complete.includes(8)'));assert.equal(a.run('currentDay()'),9);a.route('#journal');assert(a.element('#main').innerHTML.includes('&lt;img'));assert(!a.element('#main').innerHTML.includes('<img src=x'));
+const b=boot();assert(b.run('state.complete.includes(8)'));assert.equal(b.run('state.week'),1);b.route('#lesson/8');assert.equal(b.run('state.lessonStep'),2);
+const cases=[[[0,3,3,1,2,0,3,2,0,2,0,0],'The midnight overthinker'],[[0,0,0,0,0,1,0,0,0,2,0,1],'The clock watcher'],[[0,0,0,0,0,3,0,2,3,3,0,3],'The shifting rhythm'],[[0,0,0,0,0,2,0,2,0,2,0,2],'The sensitive sleep space']];
+assert.equal(b.run('quizQuestions.length'),12);
+for(const [answers,name] of cases){b.run('state.quizStep=0;state.answers=[]');b.route('#quiz');for(let i=0;i<answers.length;i++){b.click({answer:String(answers[i])});b.click({action:'quiz-next'});if(i===4)assert.equal(b.run('state.quizStep'),5,'Quiz must continue past the old fifth question');}assert.equal(b.ctx.location.hash,'profile');b.route('#profile');assert(b.element('#main').innerHTML.includes(name),name);assert(b.element('#main').innerHTML.includes('WHAT YOU TOLD US'));}
+b.run('state.answers=[0,0,0,0,0,3,0,2,0,2,0,2]');assert.equal(b.run('getSleepProfile().name'),'Your pattern is still unfolding');
+b.run('state.answers=[0,3,3,1,2,0,3,0,3,3,0,0]');assert(b.run('getSleepProfile().secondary'));assert(b.run('getSleepProfile().longTerm'));
+b.route('#lessons');assert(b.element('#main').innerHTML.includes('path-node current'));assert(b.element('#main').innerHTML.includes('learning points'));b.click({week:'0'});assert(b.element('#main').innerHTML.includes('week-reward earned'));
+b.route('#dashboard');b.click({period:'28'});assert(b.element('#main').innerHTML.includes('2.1'));b.click({period:'7'});assert(b.element('#main').innerHTML.includes('1.4'));
+b.click({action:'checkin'});assert(b.element('#checkin').open);b.element('#checkin-form').submit({preventDefault(){},target:{wakes:'3',awake:'42',hours:'6.5',rested:'A little tired'}});assert.equal(b.run('state.entry.wakes'),3);b.route('#journal');assert(b.element('#main').innerHTML.includes('42 min'));
+b.route('#night-reset');for(let i=0;i<3;i++)b.click({action:'night-next'});assert.equal(b.ctx.location.hash,'dashboard');
+b.route('#journal');b.click({action:'clear'});assert.equal(b.run('state.complete.length'),0);assert.equal(b.run('state.entry'),null);assert.equal(boot().run('currentDay()'),1);
+console.log('PASS: all routes, 28 lessons x 3 steps, completion, safe reflections, reload persistence, 4 quiz profiles, period switch, check-in, night reset, data reset.');

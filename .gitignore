@@ -1,0 +1,13 @@
+node_modules/
+build/
+.env
+.env.*
+!.env.example
+*.log
+*.pem
+*.p8
+*.key
+*.keystore
+.DS_Store
+Thumbs.db
+.openai/
