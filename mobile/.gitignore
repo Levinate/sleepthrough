@@ -6,3 +6,4 @@ android/**/build/
 *.keystore
 *.jks
 *.log
+android/qa-screens/

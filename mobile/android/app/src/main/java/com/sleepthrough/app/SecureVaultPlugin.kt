@@ -13,55 +13,64 @@ import javax.crypto.spec.GCMParameterSpec
 
 @CapacitorPlugin(name = "SecureVault")
 class SecureVaultPlugin : Plugin() {
-    private class MissingKey : Exception()
-    private class InvalidFormat : Exception()
+    private inline fun <T> at(step: String, operation: () -> T): T = try { operation() } catch(e: Exception) { throw VaultStep(step,e) }
+    private fun preferences() = context.applicationContext.getSharedPreferences("sleepthrough-encrypted", 0)
     private fun key(create: Boolean): SecretKey {
-        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        val existing = store.getKey("sleepthrough-vault-v1", null)
+        val store = at("key_load") { KeyStore.getInstance("AndroidKeyStore").apply { load(null) } }
+        val existing = at("key_get") { store.getKey("sleepthrough-vault-v1", null) }
         if (existing != null) return existing as SecretKey
         // Never replace a missing key when ciphertext still depends on it.
-        if (!create || context.getSharedPreferences("sleepthrough-encrypted", 0).all.isNotEmpty()) throw MissingKey()
-        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
+        if (!create || preferences().all.isNotEmpty()) throw VaultMissingKey()
+        return at("key_create") { KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder("sleepthrough-vault-v1", KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
-        }.generateKey()
+        }.generateKey() }
     }
-    private fun code(error: Exception, fallback: String): String = when(error) {
-        is MissingKey -> "vault_key_missing"
-        is android.security.keystore.KeyPermanentlyInvalidatedException -> "vault_key_invalid"
-        is android.security.keystore.UserNotAuthenticatedException -> "vault_locked"
-        is InvalidFormat -> "vault_format"
-        is javax.crypto.AEADBadTagException -> "vault_decrypt"
-        else -> fallback
+    private fun reject(call: PluginCall, error: Exception, fallback: String) {
+        val report = VaultFailure.describe(error,fallback)
+        call.reject(if(fallback == "vault_read") "Secure storage could not be opened" else "Changes were not saved securely", report.getString("code"), report)
     }
     @Synchronized @PluginMethod
     fun get(call: PluginCall) {
         try {
             val name = call.getString("key") ?: throw IllegalArgumentException()
-            val value = context.getSharedPreferences("sleepthrough-encrypted", 0).getString(name, null)
+            val value = at("prefs_read") { preferences().getString(name, null) }
             if (value == null) { call.resolve(JSObject().put("value", org.json.JSONObject.NULL)); return }
             val parts = value.split(":")
-            if (parts.size != 2) throw InvalidFormat()
+            if (parts.size != 2) throw VaultInvalidFormat()
             val iv: ByteArray; val ciphertext: ByteArray
             try { iv = Base64.decode(parts[0], Base64.NO_WRAP); ciphertext = Base64.decode(parts[1], Base64.NO_WRAP) }
-            catch(e: IllegalArgumentException) { throw InvalidFormat() }
-            if (iv.size != 12 || ciphertext.size < 16) throw InvalidFormat()
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key(false), GCMParameterSpec(128, iv))
-            call.resolve(JSObject().put("value", String(cipher.doFinal(ciphertext), Charsets.UTF_8)))
-        } catch (e: Exception) { call.reject("Secure storage could not be opened", code(e,"vault_read")) }
+            catch(e: IllegalArgumentException) { throw VaultInvalidFormat() }
+            if (iv.size != 12 || ciphertext.size < 16) throw VaultInvalidFormat()
+            val secret = key(false)
+            val cipher = at("cipher_create") { Cipher.getInstance("AES/GCM/NoPadding") }
+            at("cipher_init") { cipher.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, iv)) }
+            val plaintext = at("cipher_finish") { cipher.doFinal(ciphertext) }
+            call.resolve(JSObject().put("value", String(plaintext, Charsets.UTF_8)))
+        } catch (e: Exception) { reject(call,e,"vault_read") }
     }
     @Synchronized @PluginMethod
     fun set(call: PluginCall) {
         try {
             val name = call.getString("key") ?: throw IllegalArgumentException()
             val value = call.getString("value") ?: throw IllegalArgumentException()
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, key(true))
-            val encrypted = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(cipher.doFinal(value.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
-            if (!context.getSharedPreferences("sleepthrough-encrypted", 0).edit().putString(name, encrypted).commit()) throw IllegalStateException()
+            val secret = key(true)
+            val cipher = at("cipher_create") { Cipher.getInstance("AES/GCM/NoPadding") }
+            at("cipher_init") { cipher.init(Cipher.ENCRYPT_MODE, secret) }
+            val plaintext = value.toByteArray(Charsets.UTF_8)
+            val ciphertext = at("cipher_finish") { cipher.doFinal(plaintext) }
+            // Obtain the final nonce after encryption and verify that the same key can read it.
+            val iv = cipher.iv
+            if (iv == null || iv.size != 12) throw VaultVerificationFailed()
+            at("write_verify") {
+                val verify = Cipher.getInstance("AES/GCM/NoPadding")
+                verify.init(Cipher.DECRYPT_MODE, key(false), GCMParameterSpec(128, iv))
+                if (!java.security.MessageDigest.isEqual(plaintext,verify.doFinal(ciphertext))) throw VaultVerificationFailed()
+            }
+            val encrypted = Base64.encodeToString(iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+            at("prefs_write") { if (!preferences().edit().putString(name, encrypted).commit()) throw IllegalStateException() }
             call.resolve()
-        } catch (e: Exception) { call.reject("Changes were not saved securely", code(e,"vault_write")) }
+        } catch (e: Exception) { reject(call,e,"vault_write") }
     }
     @PluginMethod
     fun remove(call: PluginCall) {

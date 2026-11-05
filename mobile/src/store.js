@@ -1,25 +1,21 @@
 import{Capacitor,registerPlugin}from'@capacitor/core';
 import{createClient}from'@supabase/supabase-js';
 import{chooseNights,cloudSummary,days,localDay,dayAt,SAMSUNG}from'./sleep.js';
+import{readVault,vaultDetail}from'./vault.js';
 export const native=Capacitor.isNativePlatform(),Vault=registerPlugin('SecureVault'),Health=registerPlugin('SleepHealth');
 const preview=new Map();
 export const storage={
  async getItem(key){
   if(!native)return preview.get(key)??null;
-  try{return(await Vault.get({key})).value;}
-  catch(error){
-   // Retry transient Keystore/provider failures once, without changing the stored blob.
-   if(!['vault_locked','vault_read','storage_error'].includes(error?.code))throw error;
-   await new Promise(resolve=>setTimeout(resolve,200));return(await Vault.get({key})).value;
-  }
+  return readVault(Vault,key);
  },
  async setItem(key,value){if(native)await Vault.set({key,value});else preview.set(key,value)},
  async removeItem(key){if(native)await Vault.remove({key});else preview.delete(key)}
 };
 const config=window.SLEEPTHROUGH_CONFIG;
 export const client=createClient(config.url,config.publishableKey,{auth:{storage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,flowType:'pkce'}});
-const empty=()=>({records:{},health:{enabled:false,cloud:false,records:{},summaries:{},selection:{},token:null,lastSync:null},quiz:{answers:[],step:0},source:'manual',started:false,migrated:false});
-export const store={uid:'local',user:null,state:empty(),status:'On this phone',busy:true,ready:false,healthBusy:false,conflicts:[],recovery:false,error:'',errorCode:'',errorPhase:'',generation:0};
+const empty=()=>({records:{},health:{enabled:false,cloud:false,records:{},summaries:{},selection:{},token:null,lastSync:null},quiz:{answers:[],step:0},source:'combined',reportVersion:1,started:false,migrated:false});
+export const store={uid:'local',user:null,state:empty(),status:'On this phone',busy:true,ready:false,healthBusy:false,conflicts:[],recovery:false,error:'',errorCode:'',errorDetail:'',errorPhase:'',generation:0};
 let notify=()=>{},write=Promise.resolve(),syncing=false,cloudTimer;
 export function subscribe(fn){notify=fn;}
 export function emit(){notify(store);}
@@ -36,9 +32,9 @@ export function pruneHealth(){
 export function record(id){return store.state.records[id]?.deleted?null:store.state.records[id]?.data||null;}
 export function records(kind){return Object.values(store.state.records).filter(r=>r.kind===kind&&!r.deleted).map(r=>r.data);}
 function storageError(phase,error){
- const codes=new Set(['vault_key_missing','vault_key_invalid','vault_locked','vault_format','vault_decrypt','vault_read','vault_write','storage_error','invalid_json','invalid_state','UNIMPLEMENTED','UNAVAILABLE']);
- store.errorPhase=phase;store.errorCode=phase+':'+(codes.has(error?.code)?error.code:'unavailable');store.ready=false;
- store.error=phase==='write'?'Your latest changes could not be saved. Keep the app open and retry saving.':phase==='decode'?'Your saved data needs recovery. It has not been replaced. Please retry.':'Your saved data could not be opened. Unlock your phone, then retry. Do not clear app data.';
+ const codes=new Set(['vault_key_missing','vault_key_invalid','vault_locked','vault_format','vault_decrypt','vault_verify','vault_read','vault_write','storage_error','invalid_json','invalid_state','UNIMPLEMENTED','UNAVAILABLE']);
+ store.errorPhase=phase;store.errorCode=phase+':'+(codes.has(error?.code)?error.code:'unavailable');store.errorDetail=vaultDetail(error);store.ready=false;
+ store.error=phase==='write'?'Your latest changes could not be saved. Keep the app open and retry saving.':phase==='decode'?'Your saved data needs recovery. It has not been replaced. Please retry.':error?.code==='vault_locked'?'Unlock your phone, then retry. Do not clear app data.':'Your saved data could not be opened. Please retry. Do not clear app data.';
  store.status=phase==='write'?'Changes not saved':'Local data unavailable';
 }
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -49,6 +45,7 @@ function restore(value){
  const result={...empty(),...saved,health:{...empty().health,...saved.health},quiz:{...empty().quiz,...saved.quiz}};
  for(const map of [result.records,result.health.records,result.health.summaries,result.health.selection])if(!object(map))invalid();
  if(Object.values(result.records).some(r=>!object(r)||!object(r.data)||typeof r.kind!=='string')||!Array.isArray(result.quiz.answers)||!Number.isInteger(result.quiz.step)||result.quiz.step<0||result.quiz.step>15)invalid();
+ if(saved.reportVersion!==1){result.source='combined';result.reportVersion=1;}
  return result;
 }
 export function persist(){
@@ -57,7 +54,7 @@ export function persist(){
  write=write.catch(()=>{}).then(()=>storage.setItem('state:'+uid,snapshot)).catch(error=>{if(ticket===store.generation){storageError('write',error);emit();}throw error;});return write;
 }
 export async function loadUser(user){
- const ticket=++store.generation,uid=user?.id||'local';store.ready=false;store.busy=true;store.error='';store.errorCode='';store.errorPhase='';store.user=user;store.uid=uid;store.conflicts=[];store.state=empty();store.status=user?'Loading account…':'On this phone';emit();let phase='read',pruned=false;
+ const ticket=++store.generation,uid=user?.id||'local';store.ready=false;store.busy=true;store.error='';store.errorCode='';store.errorDetail='';store.errorPhase='';store.user=user;store.uid=uid;store.conflicts=[];store.state=empty();store.status=user?'Loading account…':'On this phone';emit();let phase='read',pruned=false;
  try{
   // Finish earlier validated saves before reading the same account again.
   await write.catch(()=>{});if(ticket!==store.generation)return false;
@@ -72,7 +69,7 @@ export async function loadUser(user){
 export async function retryStorage(){
  if(store.errorPhase!=='write')return loadUser(store.user);
  // Keep the unsaved in-memory snapshot instead of replacing it with an older disk copy.
- store.error='';store.errorCode='';store.errorPhase='';store.ready=true;
+ store.error='';store.errorCode='';store.errorDetail='';store.errorPhase='';store.ready=true;
  try{await persist();store.status='Saved on this phone';emit();await sync();return true;}catch{return false;}
 }
 export async function resumeApp(){
@@ -126,7 +123,7 @@ export async function healthSync(){
   if(!token){token=(await Health.getChangesToken()).token;const from=new Date();from.setDate(from.getDate()-29);let next=null;const fresh={};do{const page=await Health.readSleepSessions({from:from.toISOString(),to:new Date().toISOString(),pageToken:next});for(const r of page.records)if(r.origin===SAMSUNG)fresh[r.id]=r;next=page.nextPageToken;}while(next);const windowStart=days(28)[0];for(const[day]of Object.entries(h.summaries))if(day>=windowStart)affected.add(day);raw=fresh;}
   const derived=chooseNights(raw,h.selection);for(const day of affected)if(!derived[day])delete h.summaries[day];Object.assign(h.summaries,derived);
   const keepStart=days(366)[0],rawStart=days(28)[0];h.summaries=Object.fromEntries(Object.entries(h.summaries).filter(([day])=>day>=keepStart));h.records=Object.fromEntries(Object.entries(raw).filter(([,r])=>r.end.slice(0,10)>=rawStart));h.token=token;h.lastSync=new Date().toISOString();
-  if(ticket!==store.generation)return;store.state.health=h;if(!record('source-preference')&&Object.keys(h.summaries).length&&!records('night').length)store.state.source='samsung';await persist();
+  if(ticket!==store.generation)return;store.state.health=h;await persist();
   if(h.cloud&&store.user){for(const[day,s]of Object.entries(h.summaries))await setRecord('health:'+day,'health',cloudSummary(s));for(const[id,r]of Object.entries(store.state.records))if(r.kind==='health'&&!h.summaries[r.data.day])await deleteRecord(id);}
   return Object.keys(derived).length;
  }finally{store.healthBusy=false;emit();}
