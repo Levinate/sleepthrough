@@ -63,3 +63,7 @@ c.element('#checkin-form').submit({preventDefault(){},target:{wakes:'3',awake:'4
 c.route('#insights');assert(c.element('#main').innerHTML.includes('2.0'));assert(!c.element('#main').innerHTML.includes('SAMPLE DATA'));c.route('#lesson/1');c.run("lessonWork(1).picks={card0:0,card1:1,card2:0}");c.click({action:'complete'});assert(cloudWrites.at(-1).complete.includes(1));c.route('#journal');assert(c.element('#main').innerHTML.includes('Your recorded nights'));assert(!c.element('#main').innerHTML.includes('Clear my demo data'));
 auth.user=null;notify(auth);assert.equal(c.run('state.history.length'),0);assert.equal(c.run('state.complete.length'),0);assert(c.element('#main').innerHTML.includes('Welcome back.'));
 console.log('PASS: guest route protection, explicit demo, real empty account, cloud check-in upsert, personal averages, lesson saving, journal and logout cleanup.');
+storage.set('sleepthrough-v3',JSON.stringify({mvp:{started:true},complete:[1]}));
+const resumed=boot(auth);resumed.route('#lessons');assert(resumed.element('#main').innerHTML.includes('learning-path'),'a started local plan keeps its learning path after reload');
+resumed.route('#account');assert(resumed.element('#main').innerHTML.includes('Welcome back.'),'resuming a local plan never bypasses the account gate');
+console.log('PASS: local-plan reload preserves lesson access without bypassing account authentication.');
