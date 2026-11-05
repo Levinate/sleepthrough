@@ -1,6 +1,6 @@
 {
   "name": "sleepthrough-capstone",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "SleepThrough landing page, sleep dashboard, quiz and 28-day learning path",
   "engines": {
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "node server.cjs",
     "start": "node server.cjs",
-    "check": "node --check server.cjs && node --check dist/app.js && node --check dist/lessons.js && node --check dist/auth.js && node --check dist/account.js && node --check dist/config.js",
+    "check": "node --check server.cjs && node --check dist/app.js && node --check dist/lessons.js && node --check dist/auth.js && node --check dist/account.js && node --check dist/config.js && node --check dist/landing.js",
     "test": "node check-flows.cjs && node check-auth.cjs && node check-server.cjs",
     "build:railway-function": "node scripts/build-railway.cjs"
   }

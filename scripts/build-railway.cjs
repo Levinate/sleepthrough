@@ -14,12 +14,15 @@ for (const [name, type] of [
   ['lessons.js', 'text/javascript; charset=utf-8'],
   ['style.css', 'text/css; charset=utf-8'],
   ['experience.css', 'text/css; charset=utf-8'],
+  ['landing.js', 'text/javascript; charset=utf-8'],
+  ['landing.css', 'text/css; charset=utf-8'],
   ['design-notes.html', 'text/html; charset=utf-8']
 ]) assets['/' + name] = { type, text: fs.readFileSync('dist/' + name, 'utf8') };
+for(const name of ['night-v5.webp','morning-v5.webp'])assets['/assets/'+name]={type:'image/webp',base64:fs.readFileSync('dist/assets/'+name).toString('base64')};
 assets['/favicon.ico'] = { type: 'image/svg+xml', text: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#0b1b2b"/><path d="M45 39A23 23 0 0 1 27 12a22 22 0 1 0 18 27" fill="#d3c1fa"/></svg>' };
-const packed = zlib.gzipSync(JSON.stringify(assets), { level: 9 }).toString('base64');
+const packed = zlib.brotliCompressSync(JSON.stringify(assets), { params: {[zlib.constants.BROTLI_PARAM_QUALITY]:11} }).toString('base64');
 const code = `// Generated from dist by scripts/build-railway.cjs. Do not edit encoded data.
-const assets = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(Buffer.from('${packed}', 'base64'))));
+const assets = JSON.parse(require('node:zlib').brotliDecompressSync(Buffer.from('${packed}', 'base64')).toString('utf8'));
 const server = Bun.serve({
   hostname: '0.0.0.0',
   port: Number(Bun.env.PORT || 8080),
@@ -39,7 +42,7 @@ console.log('SleepThrough ready on port ' + server.port);
 `;
 assert(Buffer.byteLength(code) < 96 * 1024, 'Railway Function exceeds 96 KB');
 let handler;
-vm.runInNewContext(code, { Bun: { env: { PORT: '8080' }, gunzipSync: zlib.gunzipSync, serve: s => { handler = s.fetch; return { port: s.port }; } }, Buffer, TextDecoder, URL, Response, console });
+vm.runInNewContext(code, { require:id=>{assert.equal(id,'node:zlib');return zlib;},Bun: { env: { PORT: '8080' }, serve: s => { handler = s.fetch; return { port: s.port }; } }, Buffer, TextDecoder, URL, Response, console });
 (async () => {
   for (const route of ['/', ...Object.keys(assets), '/health']) {
     const result = handler(new Request('http://localhost' + route));
