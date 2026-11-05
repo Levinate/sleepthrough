@@ -5,6 +5,8 @@
 **Публичный сайт:** https://sleepthrough-production.up.railway.app  
 **Android отдельно:** [Levinate/sleepthrough-android](https://github.com/Levinate/sleepthrough-android).
 
+**[Скачать Android APK](https://sleepthrough-android-production.up.railway.app)**. Документация веба: [стек](docs/STACK.md), [публикация](docs/DEPLOYMENT.md).
+
 ## Что реализовано
 
 - Сохранённый navy/lavender лендинг, адаптация для телефона, иллюстрации и анимации.
