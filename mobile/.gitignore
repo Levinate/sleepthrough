@@ -1,9 +1,0 @@
-node_modules/
-www/
-android/.gradle/
-android/local.properties
-android/**/build/
-*.keystore
-*.jks
-*.log
-android/qa-screens/

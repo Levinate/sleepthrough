@@ -15,7 +15,7 @@ function request(port, requestPath, method = 'GET') {
 server.listen(0, '127.0.0.1', async () => {
   try {
     const port = server.address().port;
-    for (const file of ['/', '/app.js?v=test', '/lessons.js', '/style.css', '/experience.css', '/landing.css', '/landing.js', '/assets/night-v5.webp', '/assets/morning-v5.webp', '/design-notes.html', '/assets/night-waking.webp', '/health']) {
+    for (const file of ['/', '/app.js?v=test', '/lessons.js', '/activities.js', '/activities.css', '/quiz-visual.js', '/quiz-visual.css', '/assets/quiz-room.svg', '/style.css', '/experience.css', '/design-notes.html', '/assets/night-waking.webp', '/health']) {
       const result = await request(port, file);
       assert.equal(result.status, 200, file);
       assert(result.body.length > 0, file);

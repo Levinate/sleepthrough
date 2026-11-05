@@ -1,17 +1,23 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const {paymentApi}=require('./payments/stripe.cjs');
+const localEnv=path.join(__dirname,'.env.local');
+if(require.main===module&&fs.existsSync(localEnv))process.loadEnvFile(localEnv);
 
 const ROOT = path.join(__dirname, 'dist');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
-function createServer() {
+function createServer(options={}) {
+  const payments=paymentApi(options.payments);
   return http.createServer(async (req, res) => {
     const headers = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin' };
     function reply(status, body, type = 'text/plain; charset=utf-8', extra = {}) {
       res.writeHead(status, { ...headers, 'Content-Type': type, ...extra });
       res.end(req.method === 'HEAD' ? undefined : body);
     }
+    let paymentUrl;try{paymentUrl=new URL(req.url,'http://localhost');}catch{return reply(400,'Bad request');}
+    if(await payments.handler(req,res,paymentUrl))return;
     if (!['GET', 'HEAD'].includes(req.method)) return reply(405, 'Method not allowed', undefined, { Allow: 'GET, HEAD' });
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }

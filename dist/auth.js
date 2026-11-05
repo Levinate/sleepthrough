@@ -4,7 +4,7 @@ window.SleepAuth = (() => {
   const client = config && window.supabase?.createClient(config.url, config.publishableKey);
   const api = { user:null, ready:false, loaded:false, error:'', status:'', recovery:false, loadVersion:0 };
   let listener = () => {}, generation = 0, timer, pending = null, draining = false, version = 0;
-  const empty = () => ({complete:[], notes:{}, lessonSteps:{}, history:[], entry:null});
+  const empty = () => ({mvp:window.SleepMvp?.normalize(null),complete:[], notes:{}, lessonSteps:{}, lessonWork:{}, history:[], entry:null});
   api.data = empty();
   api.name = '';
   function emit(){ listener(api); }
@@ -18,10 +18,10 @@ window.SleepAuth = (() => {
   }
   function normalize(p){
     p = p && typeof p === 'object' ? p : {};
-    const history = (Array.isArray(p.history) ? p.history : []).filter(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.day) && Number.isFinite(e.wakes) && e.wakes>=0 && e.wakes<=30 && Number.isFinite(e.awake) && e.awake>=0 && e.awake<=720 && Number.isFinite(e.hours) && e.hours>=0 && e.hours<=16).slice(-366);
+    const history = (Array.isArray(p.history) ? p.history : []).filter(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.day) && Number.isFinite(e.wakes) && e.wakes>=0 && e.wakes<=30 && (e.awake==null || (Number.isFinite(e.awake) && e.awake>=0 && e.awake<=720)) && (e.hours==null || (Number.isFinite(e.hours) && e.hours>=0 && e.hours<=16))).slice(-366);
     const notes = Object.fromEntries(Object.entries(p.notes||{}).filter(([k,v])=>Number(k)>=1&&Number(k)<=28&&typeof v==='string').map(([k,v])=>[k,v.slice(0,1500)]));
     const lessonSteps = Object.fromEntries(Object.entries(p.lessonSteps||{}).filter(([k,v])=>Number(k)>=1&&Number(k)<=28&&[0,1,2].includes(v)));
-    return {complete:[...new Set((Array.isArray(p.complete)?p.complete:[]).filter(n=>Number.isInteger(n)&&n>=1&&n<=28))], notes, lessonSteps, history, entry:history.at(-1)||null};
+    return {mvp:window.SleepMvp?.normalize(p.mvp),complete:[...new Set((Array.isArray(p.complete)?p.complete:[]).filter(n=>Number.isInteger(n)&&n>=1&&n<=28))], notes, lessonSteps, lessonWork:normalizeLessonWork(p.lessonWork), history, entry:history.at(-1)||null};
   }
   async function load(user, force=false){
     if(!force && api.user?.id===user?.id && api.loaded) return;
