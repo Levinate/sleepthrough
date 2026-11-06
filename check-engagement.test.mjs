@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {build} from 'esbuild';
 import {QUIZ_FACTS,pendingFact,normalizeVisits,recordVisit,attendance} from './web-src/engagement.mjs';
+import {profileFocus,targetFor} from './web-src/profile-copy.mjs';
 
 test('Facts interrupt only after Q5, Q10, Q15 and Q20, then stay dismissed',()=>{
  const q={step:0,factsSeen:[]};
@@ -54,4 +55,23 @@ test('Quiz UI dismisses a fact without advancing a question; retake resets all f
  await engine.action({dataset:{action:'mvp-fact'}});assert.equal(writes,1,'duplicate fact tap cannot add another dismissal');
  await engine.action({dataset:{action:'mvp-retake'}});
  assert.equal(store.state.quiz.step,0);assert.deepEqual(store.state.quiz.factsSeen,[]);assert.equal(routes.at(-1),'quiz');
+});
+test('Profile targets preserve unknown and zero baselines and respect a valid chosen aim',()=>{
+ assert.deepEqual(targetFor({nights:4},{}),{now:4,target:2});
+ assert.deepEqual(targetFor({nights:0},{}),{now:0,target:0});
+ assert.deepEqual(targetFor({nights:null},{}),{now:null,target:null});
+ assert.deepEqual(targetFor({nights:null},{target:3}),{now:null,target:3});
+ assert.deepEqual(targetFor({nights:4},{target:99}),{now:4,target:2});
+ assert.match(profileFocus('timing').text,/caffeine and alcohol/);
+ assert.match(profileFocus('unknown').title,/Understand your pattern/);
+});
+test('Result connects actual evidence to a focus and editable aim; night retains normal continuation',async()=>{
+ const bundle=await build({stdin:{contents:"export {createMvp} from './web-src/shared/mvp.js'",resolveDir:process.cwd()},bundle:true,format:'esm',write:false,platform:'node'});
+ const {createMvp}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+ const data={},store={state:{quiz:{step:20,answers:[0,2,2,1,2,2,0,3,1,0,0,1,2,2,1,0,3,2,1,2,1]},currentNightDay:'2026-11-06'}};
+ const engine=createMvp({store,record:id=>data[id],records:()=>[],setRecord:async(id,kind,value)=>{data[id]=value;},persist:async()=>{},startLocal:async()=>{},native:false,setRoute:()=>{},render:()=>{},toast:()=>{},currentRows:()=>[]});
+ const html=engine.result();assert.match(html,/What you told us/);assert.match(html,/Your plan’s first focus/);assert.match(html,/By night 28/);assert.match(html,/not a guaranteed result/);
+ await engine.action({dataset:{mvpTarget:'3'}});assert.equal(data.goal.target,3);assert.match(engine.result(),/<strong>3<\/strong>/);
+ data['night:2026-11-06']={day:'2026-11-06',activeId:'test',wakeEvents:[{id:'test',step:3}]};
+ const night=engine.night();assert.doesNotMatch(night,/Demo: skip ahead|This wake-up is saved/);assert.match(night,/Continue when ready/);assert.match(night,/Pause breathing/);
 });

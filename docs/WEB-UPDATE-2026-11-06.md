@@ -38,3 +38,11 @@ Validation: flow, auth, HTTP and payment regression checks; dedicated engagement
 - Learning points and the number of explored lessons moved from the course page to My account, for both local profiles and signed-in accounts. Both totals remain visible on phones and keep using the existing saved lesson progress.
 - Reduced the space between the recognition section and “Less figuring it out”. Disabled app-shell entrance animation so the fixed bottom navigation does not fade or move with route changes.
 - Validation also covers hidden-strip persistence, account learning totals and the absence of totals on the course page.
+
+## Conversion-screen refinements
+
+- Result now explains the link between two actual answer signals, a factor-specific first focus/practice and a personal night-28 aim. Frequency is explicitly measured in difficult nights per week; unknown baselines stay unknown, a zero baseline supports maintaining the routine, and an existing chosen target is preserved. The goal editor and prominent plan CTA remain available.
+- All four educational pauses share an illustrated card with separated heading/body, a short product takeaway, expandable source and dedicated continue area. Statistics and sources remain unchanged.
+- Landing: removed the course-preview button and the thought-parking CTA; the report CTA now says “Find my sleep pattern” and links to the quiz. “28-night plan. No pills.” starts a separate line in the hero description.
+- Night protocol: removed the saved-episode footer and demo skip button. Pause, natural breathing, regular continuation and previous-step controls remain available; logging and note preservation are unchanged.
+- Validation: full 21-question browser journey with all four pauses, mobile overflow and sticky CTA checks, result/evidence/target tests, normal night continuation, landing links and existing flow/auth/payment regressions.
