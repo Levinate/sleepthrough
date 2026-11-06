@@ -10,7 +10,7 @@
     "dev": "node server.cjs",
     "start": "node server.cjs",
     "check": "node --check server.cjs && node --check dist/app.js && node --check dist/lessons.js && node --check dist/auth.js && node --check dist/account.js && node --check dist/config.js && node --check dist/activities.js && node --check dist/refinements.js && node --check dist/quiz-visual.js && node --check dist/mvp-web.js",
-    "test": "node check-flows.cjs && node check-auth.cjs && node check-server.cjs && node --test check-payments.test.cjs check-payment-contact.test.cjs",
+    "test": "node check-flows.cjs && node check-auth.cjs && node check-server.cjs && node --test check-payments.test.cjs check-payment-contact.test.cjs check-engagement.test.mjs",
     "build:web-mvp": "node build-web-mvp.mjs",
     "setup:stripe": "node scripts/prepare-stripe-local.cjs"
   },

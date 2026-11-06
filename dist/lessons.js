@@ -1,8 +1,8 @@
 const weeks = [
-  {title:'Understand your nights', subtitle:'Notice the pattern, without judging it.', label:'NOTICE'},
-  {title:'Quiet the busy mind', subtitle:'Give your thoughts a place to land.', label:'UNWIND'},
-  {title:'Find your rhythm', subtitle:'Build a routine that fits real life.', label:'REPEAT'},
-  {title:'Make it your own', subtitle:'Keep what helps. Make room for change.', label:'CONTINUE'}
+  {title:'Understand your nights', subtitle:'Notice the pattern, without judging it.', label:'Notice'},
+  {title:'Quiet the busy mind', subtitle:'Give your thoughts a place to land.', label:'Unwind'},
+  {title:'Find your rhythm', subtitle:'Build a routine that fits real life.', label:'Repeat'},
+  {title:'Make it your own', subtitle:'Keep what helps. Make room for change.', label:'Continue'}
 ];
 const lessons = [
  ['Your nights, without judgment','A difficult night is an experience, not a personal failure. Start by noticing what happens instead of trying to make sleep perfect.','Think back to last night. Write one neutral observation, such as “I woke once and felt alert.” Leave out words like good, bad, or failed.','What did you notice about last night?'],

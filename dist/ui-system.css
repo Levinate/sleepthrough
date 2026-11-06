@@ -191,6 +191,23 @@ body.mvp-mode .web-mvp-flow .plan-consent{margin:28px 0 16px;gap:14px}
 .week-reward{background:var(--panel2);color:var(--ink);border-color:var(--line)}
 .week-reward p{color:var(--muted)}
 .visual-quiz .qv-options button[aria-pressed=true] .qv-check,.mq-options button[aria-pressed=true]>i{background:var(--lav);color:var(--deep);border-color:var(--lav)}
+/* Keep the next-step flag out of the preceding lesson's text. */
+.learning-path .path-row{height:244px}
+.learning-path .path-row.current{margin-top:64px}
+.learning-path .start-label{top:-45px}
+.onboarding .card{display:grid;gap:16px}
+.onboarding .card h3,.onboarding .card p{margin:0}
+.tour-highlight{scroll-margin-top:20px}
+@media(max-width:700px){
+ html:has(.web-tour){scroll-padding-top:0}
+ .learning-path .path-row{height:280px;transform:translateX(calc(var(--offset)*.4))}
+ .learning-path .path-title{width:min(220px,calc(100% - 70px));max-width:none}
+ body.mvp-mode .web-tour{bottom:16px;right:16px;width:calc(100% - 32px);padding:20px;max-height:43svh;overflow:auto}
+ body.mvp-mode .web-tour h2{font-size:22px;line-height:1.25;margin:12px 0}
+ body.mvp-mode .web-tour p{font-size:15px;line-height:1.5;margin-bottom:16px}
+ body.mvp-mode .web-tour .eyebrow{font-size:12px}
+ body.mvp-mode .web-tour .button{min-height:48px;margin-right:16px}
+}
 /* Night support: one clear action, readable progress, no clock or floating tour. */
 body.mvp-mode.night-mode .web-mvp-flow{width:min(100% - 40px,600px);max-width:600px;margin:0 auto;padding:24px 0 40px}
 .night-mode .protocol{display:flex;flex-direction:column;min-height:calc(100dvh - 64px);color:var(--ink)}
@@ -308,3 +325,62 @@ body.mvp-mode .protocol form>.button{margin-top:24px!important}
  .protocol .night-guidance{padding:20px}
 }
 @media(prefers-reduced-motion:reduce){.plan-card{transition:none}.button:hover{transform:none}}
+
+/* Quiz result: one compact target and an unmistakable next step. */
+body.mvp-mode .mvp-result .result-factors{margin-bottom:16px}
+body.mvp-mode .mvp-result .why{margin:16px 0}
+body.mvp-mode .mvp-result .why summary{min-height:44px}
+body.mvp-mode .mvp-result .baseline-compact{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;padding:18px;margin-top:16px}
+body.mvp-mode .baseline-compact>div>small{display:block;font-size:15px;color:var(--muted)}
+body.mvp-mode .baseline-compact>div>strong{display:block;font-size:24px;line-height:1.3;margin:8px 0 0;color:var(--ink)}
+body.mvp-mode .baseline-compact>span{color:var(--lav)}
+body.mvp-mode .baseline-compact>details{grid-column:1/-1}
+body.mvp-mode .baseline-compact summary{padding:4px 0;min-height:44px;display:flex;align-items:center}
+body.mvp-mode .result-plan-action{position:sticky;bottom:0;z-index:8;background:var(--bg);border-top:1px solid var(--line);padding:8px 0}
+body.mvp-mode .web-mvp-flow .result-plan-action>.button{min-height:60px;font-size:19px;margin:8px 0}
+body.mvp-mode .result-plan-action p{font-size:15px;margin:8px 0;color:var(--muted)}
+body.mvp-mode .result-goal-settings{border-top:1px solid var(--line);margin-top:24px;padding-top:24px}
+body.mvp-mode .result-goal-settings h3{font-size:20px;line-height:1.4}
+body.mvp-mode .quiz-fact h1{font-size:clamp(32px,5vw,44px)}
+body.mvp-mode .quiz-fact .quiz-art{max-height:180px;margin:20px auto}
+body.mvp-mode .fact-source a{color:var(--lav);text-decoration:underline;text-underline-offset:4px}
+.nav-label-mobile{display:none}
+.week-tabs button,.unit-banner>.eyebrow,.path-title>span,.start-label{letter-spacing:0;text-transform:none}
+.attendance-card{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:24px;margin:0 0 28px}
+.attendance-title{display:flex;gap:14px;align-items:center}
+.streak-mark{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--panel2);color:var(--lav);font-size:30px;flex:none}
+.attendance-title strong{display:block;font-size:22px;line-height:1.3;color:var(--ink)}
+.attendance-title div>span{display:block;color:var(--muted);font-size:15px;margin-top:4px}
+.attendance-check{margin-left:auto;color:var(--lav);font-size:15px;white-space:nowrap}
+.attendance-week{list-style:none;padding:0;margin:24px 0 0;display:grid;grid-template-columns:repeat(7,1fr);gap:10px;max-width:540px}
+.attendance-week li{text-align:center;display:grid;justify-items:center;gap:10px;font-size:15px;color:var(--muted)}
+.attendance-week i{font-style:normal;display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--deep)}
+.attendance-week .visited i{background:var(--lav);border-color:var(--lav);color:var(--deep);font-weight:700}
+.attendance-week .today i{outline:2px solid var(--lav);outline-offset:3px}
+@media(max-width:700px){
+ :root{--mobile-nav-height:86px}
+ .app-layout,body.mvp-mode .app-layout{padding-top:0}
+ .sidebar,body.mvp-mode .sidebar{position:fixed;inset:auto 0 0;z-index:35;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:var(--deep);border:0;border-top:1px solid var(--line)}
+ .sidebar nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;overflow:visible}
+ .sidebar nav a,.sidebar nav a:nth-child(2){min-width:0;min-height:68px;padding:8px 2px;gap:6px;flex-direction:column;justify-content:center;font-size:15px;line-height:1.25;white-space:normal;text-align:center}
+ .sidebar nav a svg{width:22px;height:22px;flex:none}
+ .sidebar nav .nav-label-wide{display:none}.sidebar nav .nav-label-mobile{display:block}
+ .app-content,body.mvp-mode .app-content{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+ .week-tabs{position:sticky;top:0;z-index:20;isolation:isolate;background:var(--bg);padding:12px 0;margin:0 0 28px;gap:6px}
+ .week-tabs:before{content:'';position:absolute;inset:0 -20px;background:var(--bg);z-index:-1;border-bottom:1px solid var(--line)}
+ .week-tabs button{font-size:15px;padding:10px 4px;min-height:64px;letter-spacing:0}
+ .week-tabs button>span{font-size:12px;letter-spacing:0}
+ .learning-path .path-row{scroll-margin-top:104px}
+ body.mvp-mode .web-tour{bottom:calc(104px + env(safe-area-inset-bottom));max-height:43svh}
+ body.mvp-mode .tour-highlight{scroll-margin-top:20px}
+ body.mvp-mode .baseline-compact>div>small{font-size:15px;line-height:1.4}
+ body.mvp-mode .baseline-compact>div>strong{font-size:22px}
+ .attendance-card{padding:20px}
+ .attendance-title{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px 12px}.attendance-title strong{font-size:21px}
+ .streak-mark{width:40px;height:40px;font-size:26px}
+ .attendance-check{grid-column:2;margin:0}
+ .attendance-week{gap:5px}.attendance-week i{width:32px;height:32px}
+}
+@media(max-width:370px){
+ .week-tabs{grid-template-columns:repeat(4,80px);overflow-x:auto;scrollbar-width:thin}
+}

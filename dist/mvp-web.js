@@ -1,4 +1,45 @@
 (() => {
+  // web-src/engagement.mjs
+  var QUIZ_FACTS = [
+    { after: 5, tag: "You\u2019re not alone", title: "More than 1 in 5.", art: "calendar", text: "In a 2024 U.S. survey, 22.3% of adults aged 50\u201364 reported trouble staying asleep most days or every day.", source: "CDC / NCHS \xB7 Data Brief 559, April 2026", url: "https://www.cdc.gov/nchs/products/databriefs/db559.htm" },
+    { after: 10, tag: "A little sleep science", title: "Sleep comes in cycles.", art: "rhythm", text: "Sleep cycles usually repeat every 80\u2013100 minutes. Brief awakenings can happen between cycles; waking once doesn\u2019t describe your whole night.", source: "NIH / NHLBI \xB7 Sleep phases and stages", url: "https://www.nhlbi.nih.gov/health/sleep/stages-of-sleep" },
+    { after: 15, tag: "Your everyday rhythm", title: "Light helps set your body clock.", art: "room", text: "Light and darkness help your internal clock decide when to feel alert or sleepy. Your daily surroundings are part of the sleep picture, too.", source: "NIH / NHLBI \xB7 Your sleep/wake cycle", url: "https://www.nhlbi.nih.gov/health/sleep/sleep-wake-cycle" },
+    { after: 20, tag: "One more answer to go", title: "Sleep skills can be learned.", art: "thoughts", text: "CBT-I combines work on sleep-related thoughts, relaxation and habits. SleepThrough offers self-guided learning inspired by these skills, rather than a full clinical treatment.", source: "NIH / NHLBI \xB7 Insomnia treatment", url: "https://www.nhlbi.nih.gov/health/insomnia/treatment" }
+  ];
+  var normalizeFacts = (value) => [...new Set((Array.isArray(value) ? value : []).filter((n) => QUIZ_FACTS.some((f) => f.after === n)))];
+  var pendingFact = (quiz) => QUIZ_FACTS.find((f) => f.after === quiz.step && !normalizeFacts(quiz.factsSeen).includes(f.after));
+  function calendarDay(date = /* @__PURE__ */ new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+  function validDay(day) {
+    if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+    const d = /* @__PURE__ */ new Date(day + "T12:00:00");
+    return Number.isFinite(d.getTime()) && calendarDay(d) === day;
+  }
+  var normalizeVisits = (value) => [...new Set((Array.isArray(value) ? value : []).filter(validDay))].sort().slice(-400);
+  function shifted(date, days) {
+    const d = new Date(date);
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+  function recordVisit(visits, date = /* @__PURE__ */ new Date()) {
+    return normalizeVisits([...normalizeVisits(visits), calendarDay(date)]);
+  }
+  function attendance(visits, date = /* @__PURE__ */ new Date()) {
+    const days = new Set(normalizeVisits(visits)), today = calendarDay(date);
+    let cursor = days.has(today) ? date : shifted(date, -1), streak = 0;
+    while (days.has(calendarDay(cursor))) {
+      streak++;
+      cursor = shifted(cursor, -1);
+    }
+    const monday = shifted(date, -((date.getDay() + 6) % 7));
+    return { streak, today, visitedToday: days.has(today), week: Array.from({ length: 7 }, (_, i) => {
+      const d = shifted(monday, i), day = calendarDay(d);
+      return { day, label: d.toLocaleDateString("en-US", { weekday: "short" }), visited: days.has(day), today: day === today, future: day > today };
+    }) };
+  }
+
   // web-src/payment-model.mjs
   function checkoutDetails(commerce = {}, user = null, enteredEmail) {
     const email = String(enteredEmail !== void 0 ? enteredEmail : commerce.email || (user == null ? void 0 : user.email) || "").trim();
@@ -189,22 +230,22 @@
       return `<section class="welcome mvp-welcome"><span class="eyebrow">DESIGNED FOR LIFE AFTER 40</span><h1>Awake at 3 a.m.<br>again?</h1><p>Understand what may be waking you. Build your personal 28-night plan, one small practice at a time.</p><img class="mvp-hero-art" src="assets/quiz-room.svg" alt="A calm bedroom under a crescent moon">${btn("Find my 3am pattern \u2192", "mvp-start-quiz")}<p class="small center">See your result before choosing a plan.</p>${btn("Explore as Sarah, 52", "mvp-demo", "outline")}${link("My sleep \xB7 Sign in", "login", "soft")}<p class="small center">Wellness learning for adults. Not a medical diagnosis.</p><div class="legal-links"><a href="#privacy">Privacy</a><a href="#terms">Terms</a></div></section>`;
     }
     function quiz() {
-      const q = store.state.quiz, step = Math.min(questions.length - 1, q.step);
-      if (step === 3 && !q.factSeen) return `<section class="mvp-quiz"><span class="eyebrow">YOU\u2019RE NOT ALONE</span><img src="assets/quiz-calendar.svg" alt="" class="quiz-art"><h1>More than 1 in 5.</h1><p>22.3% of U.S. adults aged 50\u201364 reported trouble staying asleep most days or every day.</p><p class="small">Source: CDC / NCHS Data Brief 559, April 2026. NHIS data from 2024.</p>${btn("Continue \u2192", "mvp-fact")}</section>`;
+      const q = store.state.quiz, step = Math.min(questions.length - 1, q.step), fact = pendingFact(q);
+      if (fact) return `<section class="mvp-quiz quiz-fact"><div class="row"><span class="eyebrow">${esc(fact.tag)}</span><small>${step} / ${questions.length}</small></div><div class="progress"><i style="width:${step / questions.length * 100}%"></i></div><img src="assets/quiz-${fact.art}.svg" alt="" class="quiz-art"><h1 tabindex="-1">${esc(fact.title)}</h1><p>${esc(fact.text)}</p><p class="small fact-source"><a href="${fact.url}" target="_blank" rel="noopener noreferrer">${esc(fact.source)} \u2197</a></p>${btn("Continue \u2192", "mvp-fact")}</section>`;
       const scenes = ["room", "calendar", "calendar", "clock", "clock", "clock", "thoughts", "thoughts", "room", "rhythm", "room", "energy", "energy", "room", "rhythm", "rhythm", "thoughts", "room", "energy", "energy", "room"];
       return `<section class="mvp-quiz"><div class="row"><span class="eyebrow">YOUR SLEEP PATTERN</span><small>${step + 1} / ${questions.length}</small></div><div class="progress"><i style="width:${step / questions.length * 100}%"></i></div><img class="quiz-art" src="assets/quiz-${scenes[step]}.svg" alt=""><h1 tabindex="-1">${questions[step][0]}</h1><p>${step === 14 ? "Samsung Health can connect through Health Connect after setup. Other tracker connections are not available in this pilot." : "Tap the closest answer. Your best estimate is enough."}</p><div class="mvp-options ${questions[step][1].length <= 4 ? "tiles" : ""}">${questions[step][1].map((text, i) => `<button class="quiz-choice ${q.answers[step] === i ? "selected" : ""}" data-mvp-answer="${i}" aria-pressed="${q.answers[step] === i}" ${quizBusy ? "disabled" : ""}>${[2, 4].includes(step) ? `<span class="option-dots" aria-hidden="true">${"\u25CF".repeat(Math.min(i + 1, 4))}</span>` : ""}${esc(text)}<span aria-hidden="true">${q.answers[step] === i ? "\u2713" : "\u25CB"}</span></button>`).join("")}</div><div class="quiz-footer">${btn("\u2190 Back", "mvp-quiz-back", "soft", step === 0 ? "disabled" : "")}${btn("Skip", "mvp-quiz-skip", "soft", quizBusy ? "disabled" : "")}</div><p class="small center" role="status">${quizBusy ? "Answer saved. Moving on\u2026" : "One tap takes you to the next question."}</p></section>`;
     }
     function result() {
       var _a;
       const p = assessment(), evidence = (p.evidence || []).slice(0, 3);
-      return `<section class="mvp-result"><span class="eyebrow amber-label">YOUR 3 A.M. PROFILE</span><h1>Your 3 a.m. profile</h1><p>${p.factors.length ? "Your strongest quiz match: " + esc(p.name.toLowerCase()) + "." : "Your answers do not point clearly to one factor."}</p><div class="card">${factorCards(p)}${evidence.length ? `<div class="why"><h3>Why we think so:</h3>${evidence.map((i) => `<p><span>\u2713</span> ${esc(reasonText(p.answers, i))}</p>`).join("")}</div>` : ""}<div class="baseline"><small>YOUR STARTING POINT \xB7 QUIZ ESTIMATE</small><strong>${esc(p.baseline.frequency)} difficult nights / week</strong><p>This is your estimate, separate from your recorded nights.</p>${bGoal(p)}</div><h3>${esc(((_a = record("goal")) == null ? void 0 : _a.text) || "A more manageable night")}</h3><details><summary>Change my goal</summary><div class="goal-options">${["Fewer remembered awakenings", "Return to sleep more easily", "Less pressure around sleep", "Understand my pattern"].map((v, i) => {
+      return `<section class="mvp-result"><h1>Your 3 a.m. profile</h1><p>${p.factors.length ? "Your strongest quiz match: " + esc(p.name.toLowerCase()) + "." : "Your answers do not point clearly to one factor."}</p><div class="card result-factors">${factorCards(p)}${evidence.length ? `<details class="why"><summary>Why we think so</summary>${evidence.map((i) => `<p><span>\u2713</span> ${esc(reasonText(p.answers, i))}</p>`).join("")}</details>` : ""}${bGoal(p)}</div><div class="result-plan-action">${btn("Explore my 28-day plan \u2192", "mvp-lead")}<p class="small center">See your plan and pricing</p></div><p class="small center">Based on your answers. Not a diagnosis.</p>${btn("Review my answers", "mvp-retake", "soft")}<div class="result-goal-settings"><h3>${esc(((_a = record("goal")) == null ? void 0 : _a.text) || "A more manageable night")}</h3><details><summary>Change my goal</summary><div class="goal-options">${["Fewer remembered awakenings", "Return to sleep more easily", "Less pressure around sleep", "Understand my pattern"].map((v, i) => {
         var _a2;
         return `<button data-mvp-goal="${i}" aria-pressed="${(((_a2 = record("goal")) == null ? void 0 : _a2.index) || 0) === i}">${v}</button>`;
-      }).join("")}</div></details>${btn("Explore my 28-day plan \u2192", "mvp-lead")}<p class="small center">Based on your answers. Not a diagnosis.</p></div>${btn("Review my answers", "mvp-retake", "soft")}</section>`;
+      }).join("")}</div></details></div></section>`;
     }
     function bGoal(p) {
       var _a;
-      return p.baseline.nights == null ? "" : `<p><strong>Now: ${p.baseline.nights} difficult nights / week.</strong></p><p>Your goal for night 28: ${((_a = record("goal")) == null ? void 0 : _a.target) ?? Math.min(2, p.baseline.nights)} or fewer.</p><small>A personal aim, not a predicted result.</small><details><summary>Adjust my target</summary><div class="goal-options">${[0, 1, 2, 3, 4, 5, 6, 7].map((n) => `<button data-mvp-target="${n}">${n} or fewer nights / week</button>`).join("")}</div></details>`;
+      return `<div class="baseline baseline-compact"><div><small>Now \xB7 nights / week</small><strong>${p.baseline.nights == null ? "Not set" : p.baseline.nights}</strong></div><span aria-hidden="true">\u2192</span><div><small>Goal \xB7 by night 28</small><strong>${p.baseline.nights == null ? "Set a target" : (((_a = record("goal")) == null ? void 0 : _a.target) ?? Math.min(2, p.baseline.nights)) + " or fewer"}</strong></div><details><summary>Adjust my target</summary><p class="small">Your quiz estimate and personal aim, not a predicted result.</p><div class="goal-options">${[0, 1, 2, 3, 4, 5, 6, 7].map((n) => `<button data-mvp-target="${n}">${n} or fewer nights / week</button>`).join("")}</div></details></div>`;
     }
     function lead() {
       var _a, _b;
@@ -229,7 +270,7 @@
       const screens = [
         `<span class="eyebrow">YOUR PLAN IS READY</span><h1>Welcome, ${esc(profileName())}.</h1><p>Four weeks. Small practical skills. A clearer way to understand your nights.</p><div class="onboard-chips"><span>${esc(p.baseline.frequency)} difficult nights / week</span><span>${esc(p.baseline.duration)}</span><span>${esc(p.name)}</span></div><div class="card"><h3>Three things for tonight</h3><p>1. Make space for a short evening practice.</p><p>2. Try one small adjustment for your pattern.</p><p>3. Use \u201CI'm awake\u201D if you need support.</p></div>`,
         `<span class="eyebrow">TRY A TOOL BEFORE YOU NEED IT</span><h1>A little less effort.</h1><p>Try this at your own pace. Breathe naturally, or follow the gentle rhythm if comfortable.</p>${breathingMarkup(120)}<p class="small">You can pause, stop or move on at any time.</p>`,
-        `<span class="eyebrow">MAKE IT FIT YOUR LIFE</span><h1>Your plan.<br>Your rhythm.</h1><p>Choose the days you want to practise. There are no lost streaks.</p><div class="weekday-picks">${["S", "M", "T", "W", "T", "F", "S"].map((label, i) => `<button data-mvp-weekday="${i}" aria-label="${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][i]}" aria-pressed="${settings.weekdays.includes(i)}">${label}</button>`).join("")}</div><form id="mvp-routine-form"><label>Evening practice reminder<input type="time" name="windDown" value="${esc(settings.windDown)}" required></label><label>Morning check-in reminder<input type="time" name="morning" value="${esc(settings.morning)}" required></label><p class="small">Quiet hours: 10 p.m.\u20136 a.m. No automatic sleep restriction or prescribed bedtime.</p><button type="submit" class="button">Save my rhythm \u2192</button></form>`,
+        `<span class="eyebrow">MAKE IT FIT YOUR LIFE</span><h1>Your plan.<br>Your rhythm.</h1><p>Choose the days you want to practise. Every lesson stays available.</p><div class="weekday-picks">${["S", "M", "T", "W", "T", "F", "S"].map((label, i) => `<button data-mvp-weekday="${i}" aria-label="${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][i]}" aria-pressed="${settings.weekdays.includes(i)}">${label}</button>`).join("")}</div><form id="mvp-routine-form"><label>Evening practice reminder<input type="time" name="windDown" value="${esc(settings.windDown)}" required></label><label>Morning check-in reminder<input type="time" name="morning" value="${esc(settings.morning)}" required></label><p class="small">Quiet hours: 10 p.m.\u20136 a.m. No automatic sleep restriction or prescribed bedtime.</p><button type="submit" class="button">Save my rhythm \u2192</button></form>`,
         `<span class="eyebrow">A GENTLE NUDGE</span><h1>Reminders,<br>on your terms.</h1><div class="card"><h3>Evening practice \xB7 ${esc(settings.windDown)}</h3><h3>Morning check-in \xB7 ${esc(settings.morning)}</h3><p>Local reminders stay silent during quiet hours. Android may deliver them later to save battery.</p>${btn(settings.reminders ? "Reminders enabled \u2713" : "Enable local reminders", "mvp-reminders", "outline", !native ? "disabled" : "")}<p class="small">${native ? "Android will ask before notifications are enabled." : "Notification permissions are available in the Android APK."}</p></div>`,
         `<span class="eyebrow">YOUR NEXT SMALL STEP</span><h1>Night 1 of 28<br>starts tonight.</h1><p>Your plan is saved on this ${native ? "phone" : "browser"}. A free account can sync your diary and lesson progress.</p>${btn("Start my first night \u2192", "mvp-onboarding-finish")}${link("Create an account", "signup", "outline")}<p class="small">${native ? "Samsung Health can connect through Health Connect in Settings. Apple Health and other tracker connections are not available in this Android pilot." : "Samsung Health connects through Health Connect in the Android app. This website does not read health data from your device."}</p>`
       ];
@@ -481,11 +522,15 @@
           }
           setRoute("today");
           break;
-        case "mvp-fact":
-          store.state.quiz.factSeen = true;
-          await persist();
-          render();
+        case "mvp-fact": {
+          const fact = pendingFact(store.state.quiz);
+          if (fact) {
+            store.state.quiz.factsSeen = [...store.state.quiz.factsSeen || [], fact.after];
+            await persist();
+            render();
+          }
           break;
+        }
         case "mvp-quiz-back":
           clearTimeout(quizTimer);
           quizBusy = false;
@@ -501,7 +546,7 @@
         case "mvp-retake":
           clearTimeout(quizTimer);
           quizBusy = false;
-          store.state.quiz = { answers: [], step: 0, factSeen: false };
+          store.state.quiz = { answers: [], step: 0, factsSeen: [] };
           await persist();
           setRoute("quiz");
           break;
@@ -682,11 +727,11 @@
   function normalizeMvp(value) {
     var _a, _b, _c;
     const raw = value && typeof value === "object" ? value : {};
-    const quiz = { step: Math.min(20, Math.max(0, Number((_a = raw.quiz) == null ? void 0 : _a.step) || 0)), answers: Array.isArray((_b = raw.quiz) == null ? void 0 : _b.answers) ? raw.quiz.answers.slice(0, 21).map((v) => Number.isInteger(v) && v >= 0 && v < 8 ? v : null) : [], factSeen: !!((_c = raw.quiz) == null ? void 0 : _c.factSeen) };
+    const quiz = { step: Math.min(20, Math.max(0, Number((_a = raw.quiz) == null ? void 0 : _a.step) || 0)), answers: Array.isArray((_b = raw.quiz) == null ? void 0 : _b.answers) ? raw.quiz.answers.slice(0, 21).map((v) => Number.isInteger(v) && v >= 0 && v < 8 ? v : null) : [], factsSeen: normalizeFacts((_c = raw.quiz) == null ? void 0 : _c.factsSeen) };
     const records = {};
     for (const [id, r] of Object.entries(raw.records || {}).slice(-650)) if (/^(profile|assessment|goal|commerce|preferences|onboarding|night:\d{4}-\d{2}-\d{2})$/.test(id) && (r == null ? void 0 : r.data) && typeof r.data === "object" && JSON.stringify(r.data).length < 3e4) records[id] = { kind: r.kind === "night" ? "night" : r.kind === "assessment" ? "assessment" : "profile", data: structuredClone(r.data) };
     if (records.assessment) records.assessment = { kind: "assessment", data: personalProfile(quiz.answers) };
-    return { records, quiz, started: !!raw.started, currentNightDay: /^\d{4}-\d{2}-\d{2}$/.test(raw.currentNightDay) ? raw.currentNightDay : null, funnel: [], tour: Math.min(3, Math.max(-1, Number(raw.tour ?? -1))) };
+    return { records, quiz, attendance: normalizeVisits(raw.attendance), started: !!raw.started, currentNightDay: /^\d{4}-\d{2}-\d{2}$/.test(raw.currentNightDay) ? raw.currentNightDay : null, funnel: [], tourVersion: 2, tour: Math.min(4, Math.max(-1, Number(raw.tour === 3 && raw.tourVersion !== 2 ? 4 : raw.tour ?? -1))) };
   }
   function attach({ state, persist, render, appShell, toast, setDemo, footer, lessons, accountSettings, toolkitCards }) {
     const esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -871,12 +916,26 @@
     function tour() {
       var _a;
       const i = store.state.tour;
-      if (i < 0 || i >= 3) return;
-      const selectors = [".awake-main", "[data-tour=lesson]", "[data-tour=report]"], target = document.querySelector(selectors[i]);
+      if (i < 0 || i >= 4) return;
+      const selectors = [".awake-main", '.sidebar a[href="#lessons"]', "[data-tour=lesson]", "[data-tour=report]"], target = document.querySelector(selectors[i]);
       target == null ? void 0 : target.classList.add("tour-highlight");
-      target == null ? void 0 : target.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-      (_a = document.querySelector(".app-content")) == null ? void 0 : _a.insertAdjacentHTML("beforeend", `<aside class="web-tour" role="dialog" aria-label="Your sleep space tour"><span class="eyebrow">YOUR SLEEP SPACE \xB7 ${i + 1} / 3</span><h2>${["Your night-time button", "One small practice", "A picture built from your nights"][i]}</h2><p>${["If you wake at night, start here. A single step at a time, without watching the clock.", "Your 28-day path gives you hands-on tools, at your own pace.", "Log a quick check-in in the morning. Missing nights stay unknown."][i]}</p><button class="button" data-web-tour="${i + 1}">${i === 2 ? "Got it" : "Next \u2192"}</button><button class="text-button" data-web-tour="3">Skip tour</button></aside>`);
+      requestAnimationFrame(() => target == null ? void 0 : target.scrollIntoView({ block: matchMedia("(max-width:700px)").matches ? "start" : "center", inline: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
+      (_a = document.querySelector(".app-content")) == null ? void 0 : _a.insertAdjacentHTML("beforeend", `<aside class="web-tour" role="dialog" aria-label="Your sleep space tour"><span class="eyebrow">Your sleep space \xB7 ${i + 1} / 4</span><h2>${["Your night-time button", "Your 28-day learning path", "One interactive practice", "A picture built from your nights"][i]}</h2><p>${["When you wake, tap here for one quiet step at a time.", "Follow the lesson nodes through four weeks. Return each day to build your visit streak.", "Sort cards, build a tiny plan or park a thought. Completed practices stay in your toolkit.", "Log your morning check-in. Your nights shape this picture."][i]}</p><button class="button" data-web-tour="${i + 1}">${i === 3 ? "Got it" : "Next \u2192"}</button><button class="text-button" data-web-tour="4">Skip tour</button></aside>`);
     }
+    function visit() {
+      const before = store.state.attendance || [], next = recordVisit(before);
+      if (next.join() === before.join()) return false;
+      store.state.attendance = next;
+      Promise.resolve(persist()).catch((e) => toast(e.message));
+      return true;
+    }
+    function attendanceMarkup() {
+      const a = attendance(store.state.attendance);
+      return `<section class="attendance-card" aria-label="Daily visits"><div class="attendance-title"><span class="streak-mark" aria-hidden="true">\u2726</span><div><strong>${a.streak} ${a.streak === 1 ? "day" : "days"} in a row</strong><span>Every return is a small win</span></div><span class="attendance-check">\u2713 Today</span></div><ol class="attendance-week">${a.week.map((d) => `<li class="${d.visited ? "visited" : ""} ${d.today ? "today" : ""}" aria-label="${d.day}: ${d.visited ? "visited" : d.future ? "upcoming" : "not visited"}"><span>${d.label}</span><i aria-hidden="true">${d.visited ? "\u2713" : d.today ? "\xB7" : "\u2014"}</i></li>`).join("")}</ol></section>`;
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && document.body.classList.contains("app-mode") && visit()) render();
+    });
     function account() {
       var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       if ((_a = window.SleepAuth) == null ? void 0 : _a.user) accountSettings();
@@ -986,7 +1045,7 @@
       if (a === "mvp-onboarding-finish") store.state.tour = 0;
       engine.action(t).catch((err) => toast(err.message));
     }, true);
-    return { render: renderRouteSync, engine, normalize: normalizeMvp, record, currentRows };
+    return { render: renderRouteSync, engine, normalize: normalizeMvp, record, currentRows, visit, attendanceMarkup };
   }
   window.SleepMvp = { attach, normalize: normalizeMvp };
 })();
