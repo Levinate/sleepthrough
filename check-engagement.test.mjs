@@ -34,9 +34,10 @@ test('Published normalizer preserves visits and fact dismissals across reloads',
  const context={window:{},structuredClone};vm.createContext(context);
  vm.runInContext(fs.readFileSync('dist/mvp-web.js','utf8'),context);
  const normalize=context.window.SleepMvp.normalize;
- const saved=normalize({attendance:['2026-11-05','bad','2026-11-06'],quiz:{step:10,answers:[0,2],factsSeen:[5,5,9]},tour:3,tourVersion:2});
+ const saved=normalize({attendanceHidden:true,attendance:['2026-11-05','bad','2026-11-06'],quiz:{step:10,answers:[0,2],factsSeen:[5,5,9]},tour:3,tourVersion:2});
  assert.deepEqual(Array.from(saved.attendance),['2026-11-05','2026-11-06']);
  assert.deepEqual(Array.from(saved.quiz.factsSeen),[5]);
+ assert.equal(saved.attendanceHidden,true);assert.equal(normalize(saved).attendanceHidden,true,'dismissal survives reload');assert.equal(normalize(null).attendanceHidden,false,'new profiles show the visit strip');
  assert.equal(saved.tour,3);assert.equal(normalize({tour:3}).tour,4,'completed legacy tours stay completed');
  assert.deepEqual(Array.from(normalize(null).attendance),[],'a new account starts with no inherited visits');
 });

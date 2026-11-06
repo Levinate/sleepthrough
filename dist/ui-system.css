@@ -346,17 +346,24 @@ body.mvp-mode .quiz-fact .quiz-art{max-height:180px;margin:20px auto}
 body.mvp-mode .fact-source a{color:var(--lav);text-decoration:underline;text-underline-offset:4px}
 .nav-label-mobile{display:none}
 .week-tabs button,.unit-banner>.eyebrow,.path-title>span,.start-label{letter-spacing:0;text-transform:none}
-.attendance-card{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:24px;margin:0 0 28px}
-.attendance-title{display:flex;gap:14px;align-items:center}
-.streak-mark{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--panel2);color:var(--lav);font-size:30px;flex:none}
-.attendance-title strong{display:block;font-size:22px;line-height:1.3;color:var(--ink)}
-.attendance-title div>span{display:block;color:var(--muted);font-size:15px;margin-top:4px}
-.attendance-check{margin-left:auto;color:var(--lav);font-size:15px;white-space:nowrap}
-.attendance-week{list-style:none;padding:0;margin:24px 0 0;display:grid;grid-template-columns:repeat(7,1fr);gap:10px;max-width:540px}
-.attendance-week li{text-align:center;display:grid;justify-items:center;gap:10px;font-size:15px;color:var(--muted)}
-.attendance-week i{font-style:normal;display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--deep)}
+/* The daily visit strip lives on Today; it never blocks the lesson path. */
+.attendance-card{position:relative;display:grid;grid-template-columns:minmax(180px,1fr) minmax(280px,370px) 44px;align-items:center;gap:20px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin:0 0 24px}
+.attendance-title{display:flex;align-items:center;gap:10px;min-width:0}
+.streak-mark{color:var(--lav);font-size:25px;line-height:1}
+.attendance-title strong{font-size:18px;line-height:1.4;color:var(--ink)}
+.attendance-week{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.attendance-week li{text-align:center;display:grid;justify-items:center;gap:5px;font-size:15px;line-height:1.25;color:var(--muted)}
+.attendance-week i{font-style:normal;display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--line);border-radius:50%;background:var(--deep)}
 .attendance-week .visited i{background:var(--lav);border-color:var(--lav);color:var(--deep);font-weight:700}
-.attendance-week .today i{outline:2px solid var(--lav);outline-offset:3px}
+.attendance-week .today i{outline:2px solid var(--lav);outline-offset:2px}
+.attendance-dismiss{width:44px;height:44px;padding:0;display:grid;place-items:center;border:0;border-radius:12px;background:transparent;color:var(--muted);font:26px/1 var(--sans);cursor:pointer}
+.attendance-dismiss:hover{background:var(--panel2);color:var(--ink)}
+/* App-shell entrance transforms also moved/faded the fixed navigation. */
+.screen-enter>.app-layout{animation:none;transform:none;opacity:1}
+.app-layout>.sidebar{animation:none;transition:none}
+.section.recognition{padding-bottom:24px}
+.recognition .recognition-grid{margin-bottom:0}
+.section#how{padding-top:24px}
 @media(max-width:700px){
  :root{--mobile-nav-height:86px}
  .app-layout,body.mvp-mode .app-layout{padding-top:0}
@@ -375,12 +382,19 @@ body.mvp-mode .fact-source a{color:var(--lav);text-decoration:underline;text-und
  body.mvp-mode .tour-highlight{scroll-margin-top:20px}
  body.mvp-mode .baseline-compact>div>small{font-size:15px;line-height:1.4}
  body.mvp-mode .baseline-compact>div>strong{font-size:22px}
- .attendance-card{padding:20px}
- .attendance-title{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px 12px}.attendance-title strong{font-size:21px}
- .streak-mark{width:40px;height:40px;font-size:26px}
- .attendance-check{grid-column:2;margin:0}
- .attendance-week{gap:5px}.attendance-week i{width:32px;height:32px}
+ .attendance-card{grid-template-columns:minmax(0,1fr) 44px;gap:8px;padding:10px 14px 14px;border-radius:18px;margin-bottom:20px}
+ .attendance-title{gap:8px}.attendance-title strong{font-size:17px}.streak-mark{font-size:22px}
+ .attendance-week{grid-column:1/-1;grid-row:2;gap:4px}
+ .attendance-week i{width:26px;height:26px}
+ .attendance-dismiss{grid-column:2;grid-row:1}
+ .section.recognition{padding-bottom:20px}
+ .section#how{padding-top:20px}
 }
 @media(max-width:370px){
  .week-tabs{grid-template-columns:repeat(4,80px);overflow-x:auto;scrollbar-width:thin}
 }
+/* Learning totals belong to the account and both stay visible on phones. */
+.account-learning-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;max-width:760px;margin:24px 0 32px}
+.account-learning-stats>span,.account-learning-stats>span:last-child{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0;font-size:15px}
+.account-learning-stats strong{font-size:22px}
+.account-learning-stats svg{width:20px;height:20px;flex:none}

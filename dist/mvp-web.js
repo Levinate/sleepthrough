@@ -731,9 +731,9 @@
     const records = {};
     for (const [id, r] of Object.entries(raw.records || {}).slice(-650)) if (/^(profile|assessment|goal|commerce|preferences|onboarding|night:\d{4}-\d{2}-\d{2})$/.test(id) && (r == null ? void 0 : r.data) && typeof r.data === "object" && JSON.stringify(r.data).length < 3e4) records[id] = { kind: r.kind === "night" ? "night" : r.kind === "assessment" ? "assessment" : "profile", data: structuredClone(r.data) };
     if (records.assessment) records.assessment = { kind: "assessment", data: personalProfile(quiz.answers) };
-    return { records, quiz, attendance: normalizeVisits(raw.attendance), started: !!raw.started, currentNightDay: /^\d{4}-\d{2}-\d{2}$/.test(raw.currentNightDay) ? raw.currentNightDay : null, funnel: [], tourVersion: 2, tour: Math.min(4, Math.max(-1, Number(raw.tour === 3 && raw.tourVersion !== 2 ? 4 : raw.tour ?? -1))) };
+    return { records, quiz, attendance: normalizeVisits(raw.attendance), attendanceHidden: raw.attendanceHidden === true, started: !!raw.started, currentNightDay: /^\d{4}-\d{2}-\d{2}$/.test(raw.currentNightDay) ? raw.currentNightDay : null, funnel: [], tourVersion: 2, tour: Math.min(4, Math.max(-1, Number(raw.tour === 3 && raw.tourVersion !== 2 ? 4 : raw.tour ?? -1))) };
   }
-  function attach({ state, persist, render, appShell, toast, setDemo, footer, lessons, accountSettings, toolkitCards }) {
+  function attach({ state, persist, render, appShell, toast, setDemo, footer, lessons, accountSettings, toolkitCards, learningStats }) {
     const esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
     const store = { get state() {
       return state.mvp || (state.mvp = normalizeMvp(null));
@@ -903,8 +903,9 @@
     }
     function dashboard() {
       var _a, _b, _c;
+      visit();
       const p = engine.assessment(), n = currentRows().at(-1), name = ((_a = window.SleepAuth) == null ? void 0 : _a.name) || ((_b = record("profile")) == null ? void 0 : _b.name) || "there", day = ((_c = lessons.find((l2) => !state.complete.includes(l2.day))) == null ? void 0 : _c.day) || 28, l = lessons[day - 1];
-      appShell("dashboard", `<div class="page-head"><div><span class="eyebrow">ONE SMALL STEP TONIGHT</span><h1>${/^(your|there)$/i.test(name) ? "A clearer night starts here." : "A clearer night,<br>" + esc2(name) + "."}</h1></div><button class="button outline small" data-action="checkin">Morning check-in</button></div>${engine.nightCall()}<div class="dashboard-grid"><article class="card" data-tour="report"><span class="eyebrow">${n ? esc2(n.day) : "YOUR LAST NIGHT"}</span><div class="web-night-number">${(n == null ? void 0 : n.awakenings) ?? "\u2014"}${(n == null ? void 0 : n.awakeningLowerBound) ? "+" : ""}<small>awakenings</small></div><p>${(n == null ? void 0 : n.checkinComplete) ? "Your morning estimate." : n ? "Logged night-support episodes. Confirm in the morning." : "Your own nights will appear here."}</p><div class="metric-pair"><span>${(n == null ? void 0 : n.awakeMinutes) ?? "\u2014"} min<small>awake at night</small></span><span>${(n == null ? void 0 : n.sleepMinutes) == null ? "\u2014" : (n.sleepMinutes / 60).toFixed(1)} h<small>time asleep</small></span></div><a class="text-link" href="#journal">View my diary \u2192</a></article><article class="card dashboard-practice" data-tour="lesson"><div class="practice-visual" aria-hidden="true"><span>\u2726</span><i></i><i></i></div><span class="eyebrow">DAY ${day} / 28 \xB7 ${l.minutes} MIN</span><h2>${esc2(l.title)}</h2><p>One short practice. A tool for tonight.</p><a class="button" href="#lesson/${day}">Start my practice \u2192</a></article></div><article class="card"><div class="row"><h2>Your awakenings</h2><div class="segmented"><button data-period="7" aria-pressed="${state.period === 7}">Week</button><button data-period="28" aria-pressed="${state.period === 28}">Month</button></div></div>${ownChart()}</article>${record("assessment") ? `<article class="card"><span class="eyebrow amber-label">YOUR 3 A.M. PROFILE</span><h2>${esc2(p.name)}</h2><a class="text-link" href="#profile">See my profile \u2192</a></article>` : ""}${engine.dashboardExtras()}<button class="text-button" data-web-tour="0">Show me around \u2192</button>`);
+      appShell("dashboard", `<div class="page-head"><div><span class="eyebrow">ONE SMALL STEP TONIGHT</span><h1>${/^(your|there)$/i.test(name) ? "A clearer night starts here." : "A clearer night,<br>" + esc2(name) + "."}</h1></div><button class="button outline small" data-action="checkin">Morning check-in</button></div>${engine.nightCall()}${attendanceMarkup()}<div class="dashboard-grid"><article class="card" data-tour="report"><span class="eyebrow">${n ? esc2(n.day) : "YOUR LAST NIGHT"}</span><div class="web-night-number">${(n == null ? void 0 : n.awakenings) ?? "\u2014"}${(n == null ? void 0 : n.awakeningLowerBound) ? "+" : ""}<small>awakenings</small></div><p>${(n == null ? void 0 : n.checkinComplete) ? "Your morning estimate." : n ? "Logged night-support episodes. Confirm in the morning." : "Your own nights will appear here."}</p><div class="metric-pair"><span>${(n == null ? void 0 : n.awakeMinutes) ?? "\u2014"} min<small>awake at night</small></span><span>${(n == null ? void 0 : n.sleepMinutes) == null ? "\u2014" : (n.sleepMinutes / 60).toFixed(1)} h<small>time asleep</small></span></div><a class="text-link" href="#journal">View my diary \u2192</a></article><article class="card dashboard-practice" data-tour="lesson"><div class="practice-visual" aria-hidden="true"><span>\u2726</span><i></i><i></i></div><span class="eyebrow">DAY ${day} / 28 \xB7 ${l.minutes} MIN</span><h2>${esc2(l.title)}</h2><p>One short practice. A tool for tonight.</p><a class="button" href="#lesson/${day}">Start my practice \u2192</a></article></div><article class="card"><div class="row"><h2>Your awakenings</h2><div class="segmented"><button data-period="7" aria-pressed="${state.period === 7}">Week</button><button data-period="28" aria-pressed="${state.period === 28}">Month</button></div></div>${ownChart()}</article>${record("assessment") ? `<article class="card"><span class="eyebrow amber-label">YOUR 3 A.M. PROFILE</span><h2>${esc2(p.name)}</h2><a class="text-link" href="#profile">See my profile \u2192</a></article>` : ""}${engine.dashboardExtras()}${store.state.attendanceHidden ? '<button class="text-button" data-web-attendance="show">Show daily visits</button>' : ""}<button class="text-button" data-web-tour="0">Show me around \u2192</button>`);
       tour();
     }
     function journal() {
@@ -930,8 +931,9 @@
       return true;
     }
     function attendanceMarkup() {
+      if (store.state.attendanceHidden) return "";
       const a = attendance(store.state.attendance);
-      return `<section class="attendance-card" aria-label="Daily visits"><div class="attendance-title"><span class="streak-mark" aria-hidden="true">\u2726</span><div><strong>${a.streak} ${a.streak === 1 ? "day" : "days"} in a row</strong><span>Every return is a small win</span></div><span class="attendance-check">\u2713 Today</span></div><ol class="attendance-week">${a.week.map((d) => `<li class="${d.visited ? "visited" : ""} ${d.today ? "today" : ""}" aria-label="${d.day}: ${d.visited ? "visited" : d.future ? "upcoming" : "not visited"}"><span>${d.label}</span><i aria-hidden="true">${d.visited ? "\u2713" : d.today ? "\xB7" : "\u2014"}</i></li>`).join("")}</ol></section>`;
+      return `<section class="attendance-card attendance-compact" aria-label="Daily visits"><div class="attendance-title"><span class="streak-mark" aria-hidden="true">\u2726</span><strong>${a.streak} ${a.streak === 1 ? "day" : "days"} in a row</strong></div><ol class="attendance-week">${a.week.map((d) => `<li class="${d.visited ? "visited" : ""} ${d.today ? "today" : ""}" aria-label="${d.day}: ${d.visited ? "visited" : d.future ? "upcoming" : "not visited"}"><span>${d.label}</span><i aria-hidden="true">${d.visited ? "\u2713" : "\xB7"}</i></li>`).join("")}</ol><button class="attendance-dismiss" data-web-attendance="hide" aria-label="Hide daily visits" title="Hide daily visits">\xD7</button></section>`;
     }
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden && document.body.classList.contains("app-mode") && visit()) render();
@@ -939,7 +941,7 @@
     function account() {
       var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       if ((_a = window.SleepAuth) == null ? void 0 : _a.user) accountSettings();
-      else appShell("account", `<span class="eyebrow">YOUR LOCAL SLEEP SPACE</span><h1>Your plan.<br>Your choice.</h1><article class="card"><h2>${esc2(((_b = record("profile")) == null ? void 0 : _b.name) || "Your local profile")}</h2><p>Saved in this browser. An account is optional.</p><a class="button" href="#signup">Create my account</a><a class="text-link" href="#login">Sign in \u2192</a></article>`);
+      else appShell("account", `<span class="eyebrow">YOUR LOCAL SLEEP SPACE</span><h1>Your plan.<br>Your choice.</h1>${learningStats()}<article class="card"><h2>${esc2(((_b = record("profile")) == null ? void 0 : _b.name) || "Your local profile")}</h2><p>Saved in this browser. An account is optional.</p><a class="button" href="#signup">Create my account</a><a class="text-link" href="#login">Sign in \u2192</a></article>`);
       (_e = document.querySelector(".app-content")) == null ? void 0 : _e.insertAdjacentHTML("beforeend", ((_d = (_c = record("commerce")) == null ? void 0 : _c.subscription) == null ? void 0 : _d.processor) === "stripe" ? stripeSettings() : engine.settingsCard());
       if ((_f = window.SleepAuth) == null ? void 0 : _f.user) {
         let local = null;
@@ -990,6 +992,14 @@
       const t = e.target.closest("button");
       if (!t) return;
       const d = t.dataset, a = d.action || "";
+      if (d.webAttendance !== void 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        store.state.attendanceHidden = d.webAttendance === "hide";
+        persist();
+        render();
+        return;
+      }
       if (d.stripeAction) {
         e.preventDefault();
         e.stopImmediatePropagation();

@@ -31,3 +31,10 @@ Scope: website only, published from `Levinate/sleepthrough` to the existing Rail
 `web-src/engagement.mjs` owns fact scheduling and calendar-based attendance. Both fields pass through the existing MVP payload normalizer and account isolation. No database schema change is required. The production JavaScript bundle is generated with `node build-web-mvp.mjs`; `dist/ui-system.css` contains the responsive layout rules.
 
 Validation: flow, auth, HTTP and payment regression checks; dedicated engagement tests for fact positions/dismissals/retakes, local-day deduplication, gaps, year boundaries and payload reloads. Browser checks cover the full 21-question flow, all four facts, reload, the plan CTA, streak persistence, tour hints, mobile overflow and pinned panels.
+
+## Follow-up layout refinements
+
+- Daily visits now appear as a compact strip on Today, below the night-support button. The close button hides the strip; the choice persists across reloads. “Show daily visits” at the bottom of Today restores it. Course screens show no attendance strip.
+- Learning points and the number of explored lessons moved from the course page to My account, for both local profiles and signed-in accounts. Both totals remain visible on phones and keep using the existing saved lesson progress.
+- Reduced the space between the recognition section and “Less figuring it out”. Disabled app-shell entrance animation so the fixed bottom navigation does not fade or move with route changes.
+- Validation also covers hidden-strip persistence, account learning totals and the absence of totals on the course page.
